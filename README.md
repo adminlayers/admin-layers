@@ -1,23 +1,109 @@
+<div align="center">
+
 # Admin Layers
 
-**Local-first bulk admin tools for Genesys Cloud.**
+<a href="docs/images/adminlayer-infographic.png">
+  <img src="docs/images/adminlayer-infographic.png" alt="Admin Layers Overview" width="700"/>
+</a>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+**Local-first bulk admin tools for Genesys Cloud**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![GitHub Stars](https://img.shields.io/github/stars/adminlayers/admin-layers?style=social)](https://github.com/adminlayers/admin-layers)
 
-Admin Layers is a modular utility suite for Genesys Cloud administration. It runs locally on your machine, connects directly to Genesys Cloud APIs, and keeps your credentials secure.
+[Website](https://adminlayers.com) | [Documentation](https://github.com/adminlayers/docs) | [Report Issues](https://github.com/adminlayers/admin-layers/issues)
 
-🔗 **Website:** [adminlayers.com](https://adminlayers.com)
+</div>
 
 ---
 
-## Features
+## The Problem
 
-- **🚀 Bulk Operations** - Add hundreds of users to groups, assign skills, manage queues in seconds
-- **🔒 Local-First Security** - Credentials never leave your machine. Direct API calls to Genesys Cloud.
-- **👁️ Dry Run Mode** - Preview changes before executing. See the blast radius.
-- **📦 Modular Design** - Use what you need. Extend with your own utilities.
-- **📤 Import/Export** - CSV import, bulk export, seamless data movement
+Managing Genesys Cloud through the web UI is:
+
+- **Slow** - Adding 500 users to a group takes hours of clicking
+- **Risky** - No preview, no undo, no safety net
+- **Tedious** - Repetitive tasks that should be automated
+
+## The Solution
+
+Admin Layers is a modular utility suite that runs locally on your machine, connects directly to Genesys Cloud APIs, and keeps your credentials secure.
+
+<div align="center">
+<a href="docs/images/screenshots/dashboard.png">
+  <img src="docs/images/screenshots/dashboard.png" alt="Dashboard" width="600"/>
+</a>
+<p><em>Click to view full size</em></p>
+</div>
+
+---
+
+## Features at a Glance
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Bulk Operations
+
+Add hundreds of users to groups, assign skills, and manage queues - all in seconds instead of hours.
+
+<a href="docs/images/screenshots/groups.png">
+  <img src="docs/images/screenshots/groups.png" alt="Group Manager" width="100%"/>
+</a>
+
+</td>
+<td width="50%" valign="top">
+
+### Local-First Security
+
+Your credentials never leave your machine. Direct API calls to Genesys Cloud only.
+
+<a href="docs/images/adminlayer-secure-diagram.png">
+  <img src="docs/images/adminlayer-secure-diagram.png" alt="Security Architecture" width="100%"/>
+</a>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Queue Management
+
+View and manage queue membership efficiently with bulk operations.
+
+<a href="docs/images/screenshots/queues.png">
+  <img src="docs/images/screenshots/queues.png" alt="Queue Manager" width="100%"/>
+</a>
+
+</td>
+<td width="50%" valign="top">
+
+### Skills Management
+
+Bulk skill assignment with proficiency settings and gap analysis.
+
+<a href="docs/images/screenshots/skills.jpg">
+  <img src="docs/images/screenshots/skills.jpg" alt="Skill Manager" width="100%"/>
+</a>
+
+</td>
+</tr>
+</table>
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Bulk Operations** | Add hundreds of users to groups, assign skills, manage queues in seconds |
+| **Local-First Security** | Credentials never leave your machine. Direct API calls to Genesys Cloud. |
+| **Dry Run Mode** | Preview changes before executing. See the blast radius. |
+| **Modular Design** | Use what you need. Extend with your own utilities. |
+| **Import/Export** | CSV import, bulk export, seamless data movement |
+| **Full Audit Trail** | Every operation logged in your Genesys Cloud org |
 
 ---
 
@@ -63,10 +149,44 @@ The app will open in your browser at `http://localhost:8501`
 | **Group Manager** | Bulk group membership management | ✅ Available |
 | **Skill Manager** | Bulk skill assignment and lookup | ✅ Available |
 | **Queue Manager** | Queue membership and configuration | ✅ Available |
+| **User Manager** | User search and management | ✅ Available |
+
+---
+
+## Screenshots Gallery
+
+<details>
+<summary><strong>Click to expand all screenshots</strong></summary>
+
+<br/>
+
+| Dashboard | Group Manager |
+|:-:|:-:|
+| <a href="docs/images/screenshots/dashboard.png"><img src="docs/images/screenshots/dashboard.png" width="400"/></a> | <a href="docs/images/screenshots/groups.png"><img src="docs/images/screenshots/groups.png" width="400"/></a> |
+
+| Queue Manager | Skill Manager |
+|:-:|:-:|
+| <a href="docs/images/screenshots/queues.png"><img src="docs/images/screenshots/queues.png" width="400"/></a> | <a href="docs/images/screenshots/skills.jpg"><img src="docs/images/screenshots/skills.jpg" width="400"/></a> |
+
+| User Manager | Settings |
+|:-:|:-:|
+| <a href="docs/images/screenshots/users.png"><img src="docs/images/screenshots/users.png" width="400"/></a> | <a href="docs/images/screenshots/settings.png"><img src="docs/images/screenshots/settings.png" width="400"/></a> |
+
+| Help |
+|:-:|
+| <a href="docs/images/screenshots/help.png"><img src="docs/images/screenshots/help.png" width="400"/></a> |
+
+</details>
 
 ---
 
 ## Architecture
+
+<div align="center">
+<a href="docs/images/adminlayer-secure-diagram.png">
+  <img src="docs/images/adminlayer-secure-diagram.png" alt="Security Architecture" width="500"/>
+</a>
+</div>
 
 ```
 ┌─────────────────────┐          ┌──────────────────────┐
@@ -132,7 +252,7 @@ class MyUtility(BaseUtility):
             id="my_utility",
             name="My Utility",
             description="Does something useful",
-            icon="🔧",
+            icon="wrench",
             category="Custom"
         )
 
@@ -227,6 +347,7 @@ Admin Layers is not affiliated with, endorsed by, or sponsored by Genesys. Genes
 
 ## Support
 
-- 📖 [Documentation](https://github.com/adminlayers/docs)
-- 🐛 [Report Issues](https://github.com/adminlayers/admin-layers/issues)
-- 💬 [Discussions](https://github.com/adminlayers/admin-layers/discussions)
+- [Website](https://adminlayers.com)
+- [Documentation](https://github.com/adminlayers/docs)
+- [Report Issues](https://github.com/adminlayers/admin-layers/issues)
+- [Discussions](https://github.com/adminlayers/admin-layers/discussions)
