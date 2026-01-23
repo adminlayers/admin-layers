@@ -28,7 +28,7 @@ class GroupManagerUtility(BaseUtility):
             id="group_manager",
             name="Group Manager",
             description="View and manage group membership",
-            icon="ðŸ‘¥",
+            icon="👥",
             category="Users & Groups",
             requires_group=True,
             tags=["groups", "users", "membership", "bulk"]
@@ -73,7 +73,7 @@ class GroupManagerUtility(BaseUtility):
             st.caption(f"{len(members)} members")
 
         # Group search
-        with st.expander("ðŸ” Search Groups"):
+        with st.expander("🔍 Search Groups"):
             query = st.text_input("Search", placeholder="Group name...", key="gm_search", label_visibility="collapsed")
             if query:
                 groups = self.api.groups.search(query)
@@ -88,19 +88,19 @@ class GroupManagerUtility(BaseUtility):
 
         group_loaded = self.get_state('group_info') is not None
 
-        if st.button("ðŸ“‹ View Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_view"):
+        if st.button("📋 View Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_view"):
             self.set_state('page', 'view')
             st.rerun()
 
-        if st.button("âž• Add Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_add"):
+        if st.button("➕ Add Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_add"):
             self.set_state('page', 'add')
             st.rerun()
 
-        if st.button("âž– Remove Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_remove"):
+        if st.button("➖ Remove Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_remove"):
             self.set_state('page', 'remove')
             st.rerun()
 
-        if st.button("ðŸ“¤ Export", use_container_width=True, disabled=not group_loaded, key="gm_nav_export"):
+        if st.button("📤 Export", use_container_width=True, disabled=not group_loaded, key="gm_nav_export"):
             self.set_state('page', 'export')
             st.rerun()
 
@@ -168,7 +168,7 @@ class GroupManagerUtility(BaseUtility):
 
         col1, col2 = st.columns([1, 5])
         with col1:
-            if st.button("ðŸ”„ Refresh"):
+            if st.button("🔄 Refresh"):
                 self._refresh_members()
                 st.rerun()
 
@@ -258,13 +258,13 @@ class GroupManagerUtility(BaseUtility):
         with col1:
             st.success(f"**Found:** {len(found)}")
             for u in found:
-                st.caption(f"âœ“ {u['email']}")
+                st.caption(f"✓ {u['email']}")
 
         with col2:
             if not_found:
                 st.error(f"**Not found:** {len(not_found)}")
                 for e in not_found:
-                    st.caption(f"âœ— {e}")
+                    st.caption(f"✗ {e}")
 
         if found and not dry_run:
             st.markdown("---")
@@ -285,7 +285,7 @@ class GroupManagerUtility(BaseUtility):
         members = self.get_state('members', [])
 
         st.markdown("## Remove Members")
-        st.caption(f"Group: **{group_info.get('name')}** Â· {len(members)} members")
+        st.caption(f"Group: **{group_info.get('name')}** · {len(members)} members")
 
         search = st.text_input("Filter", placeholder="Search...", key="gm_remove_filter")
 
@@ -302,7 +302,7 @@ class GroupManagerUtility(BaseUtility):
         selected = st.multiselect("Select members to remove", options=list(options.keys()), key="gm_remove_select")
 
         if selected:
-            st.warning(f"âš ï¸ {len(selected)} member(s) selected")
+            st.warning(f"⚠️ {len(selected)} member(s) selected")
 
             confirm = st.checkbox("I confirm removal", key="gm_remove_confirm")
 
@@ -322,7 +322,7 @@ class GroupManagerUtility(BaseUtility):
         members = self.get_state('members', [])
 
         st.markdown("## Export Members")
-        st.caption(f"Group: **{group_info.get('name')}** Â· {len(members)} members")
+        st.caption(f"Group: **{group_info.get('name')}** · {len(members)} members")
 
         df = pd.DataFrame([{
             'Name': m.get('name', 'Unknown'),
@@ -336,7 +336,7 @@ class GroupManagerUtility(BaseUtility):
 
         with col1:
             st.download_button(
-                "ðŸ“¥ CSV (Full)",
+                "📥 CSV (Full)",
                 data=df.to_csv(index=False),
                 file_name=f"{group_info.get('name', 'group')}_members.csv",
                 mime="text/csv",
@@ -347,7 +347,7 @@ class GroupManagerUtility(BaseUtility):
         with col2:
             emails = "\n".join(df['Email'].dropna().tolist())
             st.download_button(
-                "ðŸ“¥ Emails Only",
+                "📥 Emails Only",
                 data=emails,
                 file_name=f"{group_info.get('name', 'group')}_emails.txt",
                 mime="text/plain",
