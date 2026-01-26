@@ -25,7 +25,7 @@ class SkillManagerUtility(BaseUtility):
         )
 
     def init_state(self) -> None:
-        for key, default in [('page', 'skills'), ('skills', []),
+        for key, default in [('page', 'list'), ('skills', []),
                              ('selected_skill', None), ('selected_users', [])]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
@@ -33,62 +33,67 @@ class SkillManagerUtility(BaseUtility):
     def render_sidebar(self) -> None:
         st.markdown("#### Skill Manager")
 
-        if st.button("Load All Skills", use_container_width=True, key="sm_load_skills"):
-            self._load_skills()
-
         skills = self.get_state('skills', [])
         if skills:
             st.caption(f"{len(skills)} skills loaded")
 
-        st.markdown("---")
-        st.markdown("#### Views")
-
-        for key, icon, label, page in [
-            ("sm_nav_skills", "\U0001F4CB", "All Skills", "skills"),
-            ("sm_nav_user", "\U0001F464", "User Skills", "user_skills"),
-            ("sm_nav_assign", "\U00002795", "Bulk Assign", "assign"),
-            ("sm_nav_remove", "\U00002796", "Bulk Remove", "remove"),
-            ("sm_nav_export", "\U0001F4E4", "Export", "export"),
-        ]:
-            if st.button(f"{icon} {label}", use_container_width=True, key=key):
+        pages = [
+            ("sm_nav_list", "\U0001F4CB All Skills", "list"),
+            ("sm_nav_user", "\U0001F464 User Skills", "user_skills"),
+            ("sm_nav_assign", "\U00002795 Bulk Assign", "assign"),
+            ("sm_nav_remove", "\U00002796 Bulk Remove", "remove"),
+            ("sm_nav_export", "\U0001F4E4 Export", "export"),
+        ]
+        for key, label, page in pages:
+            if st.button(label, use_container_width=True, key=key):
                 self.set_state('page', page)
                 st.rerun()
 
     def render_main(self) -> None:
         self.init_state()
-        page = self.get_state('page', 'skills')
+        page = self.get_state('page', 'list')
         pages = {
-            'skills': self._page_skills, 'user_skills': self._page_user_skills,
+            'list': self._page_list, 'user_skills': self._page_user_skills,
             'assign': self._page_assign, 'remove': self._page_remove,
             'export': self._page_export,
         }
-        pages.get(page, self._page_skills)()
+        pages.get(page, self._page_list)()
 
     # -- data helpers --
 
-    def _load_skills(self) -> None:
+    def _load_skills(self) -> List[Dict]:
         with st.spinner("Loading skills..."):
             try:
                 skills = self.api.routing.get_skills()
                 self.set_state('skills', skills)
-                st.rerun()
+                return skills
             except Exception as e:
                 st.error(f"Failed to load skills: {e}")
+                return []
 
     def _ensure_skills(self) -> List[Dict]:
         skills = self.get_state('skills', [])
         if not skills:
-            st.warning("Click 'Load All Skills' in the sidebar first.")
+            skills = self._load_skills()
         return skills
 
     # -- pages --
 
-    def _page_skills(self) -> None:
+    def _page_list(self) -> None:
         st.markdown("## Skills")
         skills = self.get_state('skills', [])
 
         if not skills:
-            st.info("Click 'Load All Skills' in the sidebar to begin.")
+            with st.spinner("Loading skills..."):
+                try:
+                    skills = self.api.routing.get_skills()
+                    self.set_state('skills', skills)
+                except Exception as e:
+                    st.error(f"Failed to load skills: {e}")
+                    return
+
+        if not skills:
+            st.info("No skills found in your org.")
             return
 
         c1, c2 = st.columns(2)
@@ -96,7 +101,8 @@ class SkillManagerUtility(BaseUtility):
         active = sum(1 for s in skills if s.get('state') == 'active')
         c2.metric("Active", active)
 
-        search = st.text_input("Filter", placeholder="Search skills...", key="sm_filter")
+        search = st.text_input("Search", placeholder="Filter skills...",
+                               key="sm_list_search", label_visibility="collapsed")
 
         df = pd.DataFrame([{
             'Name': s.get('name', ''),
