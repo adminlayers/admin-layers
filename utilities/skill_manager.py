@@ -1,6 +1,6 @@
 """
 Skill Manager Utility
-Bulk skill assignment and management for Genesys Cloud users.
+Bulk skill assignment and management for Genesys Cloud.
 """
 
 import streamlit as st
@@ -11,474 +11,364 @@ from .base import BaseUtility, UtilityConfig
 
 
 class SkillManagerUtility(BaseUtility):
-    """
-    Utility for managing Genesys Cloud routing skills.
-
-    Features:
-    - View all skills in org
-    - View user's current skills
-    - Bulk assign skills to users
-    - Bulk remove skills from users
-    - Skill gap analysis
-    - Export skill assignments
-    """
 
     @staticmethod
     def get_config() -> UtilityConfig:
         return UtilityConfig(
             id="skill_manager",
             name="Skill Manager",
-            description="Bulk skill assignment and management",
-            icon="🎯",
+            description="Bulk skill assignment and user skill lookup",
+            icon="\U0001F3AF",
             category="Routing",
             requires_user=False,
             tags=["skills", "routing", "users", "bulk", "assignment"]
         )
 
     def init_state(self) -> None:
-        """Initialize utility state."""
-        if self.get_state('page') is None:
-            self.set_state('page', 'skills')
-        if self.get_state('skills') is None:
-            self.set_state('skills', [])
-        if self.get_state('selected_skill') is None:
-            self.set_state('selected_skill', None)
-        if self.get_state('selected_users') is None:
-            self.set_state('selected_users', [])
+        for key, default in [('page', 'list'), ('skills', []),
+                             ('selected_skill', None), ('selected_users', [])]:
+            if self.get_state(key) is None:
+                self.set_state(key, default)
 
     def render_sidebar(self) -> None:
-        """Render sidebar controls."""
         st.markdown("#### Skill Manager")
-
-        # Load skills button
-        if st.button("🔄 Load All Skills", use_container_width=True, key="sm_load_skills"):
-            self._load_skills()
 
         skills = self.get_state('skills', [])
         if skills:
             st.caption(f"{len(skills)} skills loaded")
 
-        st.markdown("---")
-
-        # Navigation
-        st.markdown("#### Views")
-
-        if st.button("📋 Skills List", use_container_width=True, key="sm_nav_skills"):
-            self.set_state('page', 'skills')
-            st.rerun()
-
-        if st.button("👤 User Skills", use_container_width=True, key="sm_nav_user"):
-            self.set_state('page', 'user_skills')
-            st.rerun()
-
-        if st.button("➕ Bulk Assign", use_container_width=True, key="sm_nav_assign"):
-            self.set_state('page', 'assign')
-            st.rerun()
-
-        if st.button("➖ Bulk Remove", use_container_width=True, key="sm_nav_remove"):
-            self.set_state('page', 'remove')
-            st.rerun()
-
-        if st.button("📤 Export", use_container_width=True, key="sm_nav_export"):
-            self.set_state('page', 'export')
-            st.rerun()
+        pages = [
+            ("sm_nav_list", "\U0001F4CB All Skills", "list"),
+            ("sm_nav_user", "\U0001F464 User Skills", "user_skills"),
+            ("sm_nav_assign", "\U00002795 Bulk Assign", "assign"),
+            ("sm_nav_remove", "\U00002796 Bulk Remove", "remove"),
+            ("sm_nav_export", "\U0001F4E4 Export", "export"),
+        ]
+        for key, label, page in pages:
+            if st.button(label, use_container_width=True, key=key):
+                self.set_state('page', page)
+                st.rerun()
 
     def render_main(self) -> None:
-        """Render main content."""
         self.init_state()
+        page = self.get_state('page', 'list')
+        pages = {
+            'list': self._page_list, 'user_skills': self._page_user_skills,
+            'assign': self._page_assign, 'remove': self._page_remove,
+            'export': self._page_export,
+        }
+        pages.get(page, self._page_list)()
 
-        page = self.get_state('page', 'skills')
+    # -- data helpers --
 
-        if page == 'skills':
-            self._render_skills_page()
-        elif page == 'user_skills':
-            self._render_user_skills_page()
-        elif page == 'assign':
-            self._render_assign_page()
-        elif page == 'remove':
-            self._render_remove_page()
-        elif page == 'export':
-            self._render_export_page()
-        else:
-            self._render_skills_page()
-
-    # =========================================================================
-    # Page Renderers
-    # =========================================================================
-
-    def _render_skills_page(self) -> None:
-        """Render skills list page."""
-        st.markdown("## Skills List")
-
-        skills = self.get_state('skills', [])
-
-        if not skills:
-            st.info("Click 'Load All Skills' in the sidebar to begin.")
-            return
-
-        # Filter
-        search = st.text_input("Filter skills", placeholder="Search by name...")
-
-        # Build dataframe
-        df = pd.DataFrame([{
-            'Name': s.get('name', 'Unknown'),
-            'State': s.get('state', 'N/A'),
-            'ID': s.get('id', '')
-        } for s in skills])
-
-        if search and not df.empty:
-            mask = df['Name'].str.contains(search, case=False, na=False)
-            df = df[mask]
-
-        st.caption(f"Showing {len(df)} skills")
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
-
-    def _render_user_skills_page(self) -> None:
-        """Render user skills lookup page."""
-        st.markdown("## User Skills Lookup")
-
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            user_input = st.text_input(
-                "User Email or ID",
-                placeholder="user@example.com or user-id",
-                key="sm_user_input"
-            )
-
-        with col2:
-            st.write("")  # Spacer
-            st.write("")
-            lookup = st.button("Lookup", type="primary", use_container_width=True)
-
-        if lookup and user_input:
-            self._lookup_user_skills(user_input)
-
-        # Display results
-        user_skills = self.get_state('current_user_skills', [])
-        user_info = self.get_state('current_user_info')
-
-        if user_info:
-            st.markdown(f"### {user_info.get('name', 'Unknown User')}")
-            st.caption(user_info.get('email', ''))
-
-            if user_skills:
-                df = pd.DataFrame([{
-                    'Skill': s.get('name', 'Unknown'),
-                    'Proficiency': s.get('proficiency', 0),
-                    'State': s.get('state', 'N/A'),
-                    'ID': s.get('id', '')
-                } for s in user_skills])
-
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.warning("User has no skills assigned")
-
-    def _render_assign_page(self) -> None:
-        """Render bulk skill assignment page."""
-        st.markdown("## Bulk Assign Skills")
-
-        skills = self.get_state('skills', [])
-        if not skills:
-            st.warning("Load skills first from the sidebar")
-            return
-
-        # Skill selection
-        skill_options = {s.get('name', 'Unknown'): s.get('id') for s in skills}
-        selected_skill_name = st.selectbox(
-            "Select Skill to Assign",
-            options=list(skill_options.keys()),
-            key="sm_assign_skill"
-        )
-
-        # Proficiency
-        proficiency = st.slider(
-            "Proficiency Level",
-            min_value=0.0,
-            max_value=5.0,
-            value=3.0,
-            step=0.5,
-            key="sm_proficiency"
-        )
-
-        st.markdown("---")
-
-        # User input
-        tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
-
-        emails_input = ""
-
-        with tab1:
-            emails_input = st.text_area(
-                "Enter user emails (one per line)",
-                height=200,
-                placeholder="user1@example.com\nuser2@example.com",
-                key="sm_emails_paste"
-            )
-
-        with tab2:
-            uploaded = st.file_uploader("Upload CSV or TXT", type=['csv', 'txt'], key="sm_upload")
-            if uploaded:
-                content = uploaded.read().decode('utf-8')
-                emails_input = "\n".join([
-                    line.split(',')[0].strip().strip('"')
-                    for line in content.split('\n')
-                    if '@' in line
-                ])
-                st.text_area("Emails from file:", value=emails_input, height=150, disabled=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            dry_run = st.checkbox("Preview only", value=True, key="sm_dry_run")
-        with col2:
-            if st.button("Process", type="primary", use_container_width=True, key="sm_process"):
-                if emails_input and selected_skill_name:
-                    skill_id = skill_options[selected_skill_name]
-                    self._process_assign(emails_input, skill_id, selected_skill_name, proficiency, dry_run)
-
-    def _render_remove_page(self) -> None:
-        """Render bulk skill removal page."""
-        st.markdown("## Bulk Remove Skills")
-
-        skills = self.get_state('skills', [])
-        if not skills:
-            st.warning("Load skills first from the sidebar")
-            return
-
-        # Skill selection
-        skill_options = {s.get('name', 'Unknown'): s.get('id') for s in skills}
-        selected_skill_name = st.selectbox(
-            "Select Skill to Remove",
-            options=list(skill_options.keys()),
-            key="sm_remove_skill"
-        )
-
-        st.markdown("---")
-
-        # User input
-        emails_input = st.text_area(
-            "Enter user emails (one per line)",
-            height=200,
-            placeholder="user1@example.com\nuser2@example.com",
-            key="sm_remove_emails"
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            dry_run = st.checkbox("Preview only", value=True, key="sm_remove_dry_run")
-        with col2:
-            confirm = st.checkbox("I confirm removal", key="sm_remove_confirm")
-
-        if st.button("Remove Skills", type="primary", disabled=not confirm and not dry_run, 
-                     use_container_width=True, key="sm_remove_btn"):
-            if emails_input and selected_skill_name:
-                skill_id = skill_options[selected_skill_name]
-                self._process_remove(emails_input, skill_id, selected_skill_name, dry_run)
-
-    def _render_export_page(self) -> None:
-        """Render export page."""
-        st.markdown("## Export Skills")
-
-        skills = self.get_state('skills', [])
-        if not skills:
-            st.warning("Load skills first from the sidebar")
-            return
-
-        df = pd.DataFrame([{
-            'Name': s.get('name', 'Unknown'),
-            'State': s.get('state', 'N/A'),
-            'ID': s.get('id', '')
-        } for s in skills])
-
-        st.markdown("### Download Options")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.download_button(
-                "📥 CSV (Full)",
-                data=df.to_csv(index=False),
-                file_name="skills_export.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="sm_export_csv"
-            )
-
-        with col2:
-            st.download_button(
-                "📥 JSON",
-                data=df.to_json(orient='records', indent=2),
-                file_name="skills_export.json",
-                mime="application/json",
-                use_container_width=True,
-                key="sm_export_json"
-            )
-
-        st.markdown("### Preview")
-        st.dataframe(df.head(20), use_container_width=True, hide_index=True)
-
-    # =========================================================================
-    # Data Operations
-    # =========================================================================
-
-    def _load_skills(self) -> None:
-        """Load all skills from org."""
+    def _load_skills(self) -> List[Dict]:
         with st.spinner("Loading skills..."):
             try:
                 skills = self.api.routing.get_skills()
                 self.set_state('skills', skills)
-                self.show_success(f"Loaded {len(skills)} skills")
-                st.rerun()
+                return skills
             except Exception as e:
-                self.show_error(f"Failed to load skills: {e}")
+                st.error(f"Failed to load skills: {e}")
+                return []
+
+    def _ensure_skills(self) -> List[Dict]:
+        skills = self.get_state('skills', [])
+        if not skills:
+            skills = self._load_skills()
+        return skills
+
+    # -- pages --
+
+    def _page_list(self) -> None:
+        st.markdown("## Skills")
+        skills = self.get_state('skills', [])
+
+        if not skills:
+            with st.spinner("Loading skills..."):
+                try:
+                    skills = self.api.routing.get_skills()
+                    self.set_state('skills', skills)
+                except Exception as e:
+                    st.error(f"Failed to load skills: {e}")
+                    return
+
+        if not skills:
+            st.info("No skills found in your org.")
+            return
+
+        c1, c2 = st.columns(2)
+        c1.metric("Total Skills", len(skills))
+        active = sum(1 for s in skills if s.get('state') == 'active')
+        c2.metric("Active", active)
+
+        search = st.text_input("Search", placeholder="Filter skills...",
+                               key="sm_list_search", label_visibility="collapsed")
+
+        df = pd.DataFrame([{
+            'Name': s.get('name', ''),
+            'State': s.get('state', ''),
+            'ID': s.get('id', ''),
+        } for s in skills])
+
+        if search and not df.empty:
+            df = df[df['Name'].str.contains(search, case=False, na=False)]
+
+        st.caption(f"Showing {len(df)} of {len(skills)} skills")
+        st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
+
+    def _page_user_skills(self) -> None:
+        st.markdown("## User Skills Lookup")
+
+        c1, c2 = st.columns([4, 1])
+        with c1:
+            user_input = st.text_input(
+                "User email or ID", placeholder="user@example.com",
+                key="sm_user_input"
+            )
+        with c2:
+            st.markdown("")
+            st.markdown("")
+            lookup = st.button("Lookup", type="primary", use_container_width=True, key="sm_lookup_btn")
+
+        if lookup and user_input:
+            self._lookup_user_skills(user_input)
+
+        user_info = self.get_state('current_user_info')
+        user_skills = self.get_state('current_user_skills', [])
+
+        if user_info:
+            st.markdown("---")
+            st.markdown(f"### {user_info.get('name', 'Unknown')}")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Skills", len(user_skills))
+            c2.caption(f"**Email:** {user_info.get('email', '')}")
+            c3.caption(f"**ID:** {user_info.get('id', '')}")
+
+            if user_skills:
+                df = pd.DataFrame([{
+                    'Skill': s.get('name', ''),
+                    'Proficiency': s.get('proficiency', 0),
+                    'State': s.get('state', ''),
+                    'ID': s.get('id', ''),
+                } for s in user_skills])
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No skills assigned to this user.")
 
     def _lookup_user_skills(self, user_input: str) -> None:
-        """Look up skills for a user."""
         with st.spinner("Looking up user..."):
-            # Try to find user by email first
             user = None
             if '@' in user_input:
                 user = self.api.users.search_by_email(user_input)
             else:
-                # Assume it's a user ID
-                response = self.api.users.get(user_input)
-                if response.success:
-                    user = response.data
+                resp = self.api.users.get(user_input)
+                if resp.success:
+                    user = resp.data
 
             if not user:
-                self.show_error("User not found")
+                st.error("User not found.")
                 self.set_state('current_user_info', None)
                 self.set_state('current_user_skills', [])
                 return
 
             self.set_state('current_user_info', user)
-
-            # Get user's skills
             user_skills = self.api.routing.get_user_skills(user['id'])
             self.set_state('current_user_skills', user_skills)
             st.rerun()
 
-    def _process_assign(self, emails_input: str, skill_id: str, skill_name: str, 
+    def _page_assign(self) -> None:
+        st.markdown("## Bulk Assign Skill")
+        skills = self._ensure_skills()
+        if not skills:
+            return
+
+        skill_map = {s.get('name', ''): s.get('id') for s in skills}
+        selected_name = st.selectbox("Skill to assign", list(skill_map.keys()), key="sm_assign_skill")
+
+        proficiency = st.slider("Proficiency", 0.0, 5.0, 3.0, 0.5, key="sm_prof")
+
+        st.markdown("---")
+
+        tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
+        emails_text = ""
+        with tab1:
+            emails_text = st.text_area(
+                "Emails (one per line)", height=180,
+                placeholder="user1@company.com\nuser2@company.com", key="sm_paste"
+            )
+        with tab2:
+            uploaded = st.file_uploader("CSV or TXT", type=['csv', 'txt'], key="sm_upload")
+            if uploaded:
+                content = uploaded.read().decode('utf-8')
+                emails_text = "\n".join(
+                    line.split(',')[0].strip().strip('"')
+                    for line in content.split('\n') if '@' in line
+                )
+                st.code(emails_text, language=None)
+
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="sm_dryrun")
+        run = c2.button("Process", type="primary", use_container_width=True, key="sm_run_assign")
+
+        if run and emails_text and selected_name:
+            skill_id = skill_map[selected_name]
+            self._execute_assign(emails_text, skill_id, selected_name, proficiency, dry_run)
+
+    def _execute_assign(self, raw: str, skill_id: str, skill_name: str,
                         proficiency: float, dry_run: bool) -> None:
-        """Process bulk skill assignment."""
-        emails = list(dict.fromkeys([
-            e.strip() for e in emails_input.split('\n')
-            if e.strip() and '@' in e
-        ]))
-
+        emails = list(dict.fromkeys(
+            e.strip() for e in raw.split('\n') if e.strip() and '@' in e
+        ))
         if not emails:
-            self.show_error("No valid emails found")
+            st.error("No valid emails found.")
             return
 
-        st.markdown("### Processing")
+        st.markdown("---")
         progress = st.progress(0)
-
-        found = []
-        not_found = []
-
+        found, missing = [], []
         for i, email in enumerate(emails):
             progress.progress((i + 1) / len(emails))
             user = self.api.users.search_by_email(email)
             if user:
-                found.append({'id': user['id'], 'name': user.get('name', 'Unknown'), 'email': email})
+                found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
             else:
-                not_found.append(email)
+                missing.append(email)
+        progress.empty()
 
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success(f"**{len(found)}** users found")
+            if found:
+                st.dataframe(pd.DataFrame(found)[['name', 'email']], hide_index=True, use_container_width=True)
+        with c2:
+            if missing:
+                st.error(f"**{len(missing)}** not found")
+                for e in missing:
+                    st.caption(f"- {e}")
 
-        with col1:
-            self.show_success(f"**Found:** {len(found)}")
-            for u in found:
-                st.caption(f"✓ {u['email']}")
-
-        with col2:
-            if not_found:
-                self.show_error(f"**Not found:** {len(not_found)}")
-                for e in not_found:
-                    st.caption(f"✗ {e}")
-
-        if found and not dry_run:
-            st.markdown("---")
-            st.markdown(f"**Assigning skill:** {skill_name} (proficiency: {proficiency})")
-
-            assign_progress = st.progress(0)
-            success_count = 0
-            fail_count = 0
-
-            for i, user in enumerate(found):
-                assign_progress.progress((i + 1) / len(found))
-                response = self.api.routing.add_user_skill(user['id'], skill_id, proficiency)
-                if response.success:
-                    success_count += 1
-                else:
-                    fail_count += 1
-                    st.caption(f"⚠ Failed for {user['email']}: {response.error}")
-
-            self.show_success(f"Assigned skill to {success_count} users")
-            if fail_count:
-                self.show_warning(f"{fail_count} assignments failed")
-
-        elif found and dry_run:
-            self.show_info(f"Preview complete. Would assign '{skill_name}' to {len(found)} users. Uncheck 'Preview only' to execute.")
-
-    def _process_remove(self, emails_input: str, skill_id: str, skill_name: str, dry_run: bool) -> None:
-        """Process bulk skill removal."""
-        emails = list(dict.fromkeys([
-            e.strip() for e in emails_input.split('\n')
-            if e.strip() and '@' in e
-        ]))
-
-        if not emails:
-            self.show_error("No valid emails found")
+        if not found:
+            return
+        if dry_run:
+            st.info(f"Dry run: would assign '{skill_name}' (proficiency {proficiency}) to {len(found)} users.")
             return
 
-        st.markdown("### Processing")
+        st.markdown("---")
+        st.markdown(f"**Assigning:** {skill_name} (proficiency {proficiency})")
+        prog = st.progress(0)
+        ok, fail = 0, 0
+        for i, u in enumerate(found):
+            prog.progress((i + 1) / len(found))
+            resp = self.api.routing.add_user_skill(u['id'], skill_id, proficiency)
+            if resp.success:
+                ok += 1
+            else:
+                fail += 1
+                st.caption(f"Failed for {u['email']}: {resp.error}")
+        prog.empty()
+
+        st.success(f"Assigned to {ok} users.")
+        if fail:
+            st.warning(f"{fail} failed.")
+
+    def _page_remove(self) -> None:
+        st.markdown("## Bulk Remove Skill")
+        skills = self._ensure_skills()
+        if not skills:
+            return
+
+        skill_map = {s.get('name', ''): s.get('id') for s in skills}
+        selected_name = st.selectbox("Skill to remove", list(skill_map.keys()), key="sm_rm_skill")
+
+        st.markdown("---")
+
+        emails_text = st.text_area(
+            "User emails (one per line)", height=180,
+            placeholder="user1@company.com\nuser2@company.com", key="sm_rm_emails"
+        )
+
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="sm_rm_dryrun")
+        confirm = c2.checkbox("I confirm removal", key="sm_rm_confirm")
+
+        if st.button("Remove Skill", type="primary",
+                     disabled=not confirm and not dry_run,
+                     use_container_width=True, key="sm_rm_btn"):
+            if emails_text and selected_name:
+                skill_id = skill_map[selected_name]
+                self._execute_remove(emails_text, skill_id, selected_name, dry_run)
+
+    def _execute_remove(self, raw: str, skill_id: str, skill_name: str, dry_run: bool) -> None:
+        emails = list(dict.fromkeys(
+            e.strip() for e in raw.split('\n') if e.strip() and '@' in e
+        ))
+        if not emails:
+            st.error("No valid emails found.")
+            return
+
+        st.markdown("---")
         progress = st.progress(0)
-
-        found = []
-        not_found = []
-
+        found, missing = [], []
         for i, email in enumerate(emails):
             progress.progress((i + 1) / len(emails))
             user = self.api.users.search_by_email(email)
             if user:
-                found.append({'id': user['id'], 'name': user.get('name', 'Unknown'), 'email': email})
+                found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
             else:
-                not_found.append(email)
+                missing.append(email)
+        progress.empty()
 
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success(f"**{len(found)}** users found")
+        with c2:
+            if missing:
+                st.error(f"**{len(missing)}** not found")
 
-        with col1:
-            self.show_success(f"**Found:** {len(found)}")
-            for u in found:
-                st.caption(f"✓ {u['email']}")
+        if not found:
+            return
+        if dry_run:
+            st.info(f"Dry run: would remove '{skill_name}' from {len(found)} users.")
+            return
 
-        with col2:
-            if not_found:
-                self.show_error(f"**Not found:** {len(not_found)}")
-                for e in not_found:
-                    st.caption(f"✗ {e}")
+        st.markdown("---")
+        st.markdown(f"**Removing:** {skill_name}")
+        prog = st.progress(0)
+        ok, fail = 0, 0
+        for i, u in enumerate(found):
+            prog.progress((i + 1) / len(found))
+            resp = self.api.routing.remove_user_skill(u['id'], skill_id)
+            if resp.success:
+                ok += 1
+            else:
+                fail += 1
+                st.caption(f"Failed for {u['email']}: {resp.error}")
+        prog.empty()
 
-        if found and not dry_run:
-            st.markdown("---")
-            st.markdown(f"**Removing skill:** {skill_name}")
+        st.success(f"Removed from {ok} users.")
+        if fail:
+            st.warning(f"{fail} failed.")
 
-            remove_progress = st.progress(0)
-            success_count = 0
-            fail_count = 0
+    def _page_export(self) -> None:
+        st.markdown("## Export Skills")
+        skills = self._ensure_skills()
+        if not skills:
+            return
 
-            for i, user in enumerate(found):
-                remove_progress.progress((i + 1) / len(found))
-                response = self.api.routing.remove_user_skill(user['id'], skill_id)
-                if response.success:
-                    success_count += 1
-                else:
-                    fail_count += 1
-                    st.caption(f"⚠ Failed for {user['email']}: {response.error}")
+        df = pd.DataFrame([{
+            'Name': s.get('name', ''),
+            'State': s.get('state', ''),
+            'ID': s.get('id', ''),
+        } for s in skills])
 
-            self.show_success(f"Removed skill from {success_count} users")
-            if fail_count:
-                self.show_warning(f"{fail_count} removals failed")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download CSV", data=df.to_csv(index=False),
+                               file_name="skills.csv", mime="text/csv",
+                               use_container_width=True, key="sm_dl_csv")
+        with c2:
+            st.download_button("Download JSON", data=df.to_json(orient='records', indent=2),
+                               file_name="skills.json", mime="application/json",
+                               use_container_width=True, key="sm_dl_json")
 
-        elif found and dry_run:
-            self.show_info(f"Preview complete. Would remove '{skill_name}' from {len(found)} users. Uncheck 'Preview only' to execute.")
+        st.markdown("### Preview")
+        st.dataframe(df, use_container_width=True, hide_index=True)

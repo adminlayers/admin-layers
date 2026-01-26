@@ -5,22 +5,12 @@ Manage group membership in Genesys Cloud.
 
 import streamlit as st
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from .base import BaseUtility, UtilityConfig
 
 
 class GroupManagerUtility(BaseUtility):
-    """
-    Utility for managing Genesys Cloud group membership.
-
-    Features:
-    - View group members
-    - Add members by email
-    - Remove members
-    - Export member lists
-    - Import members from file
-    """
 
     @staticmethod
     def get_config() -> UtilityConfig:
@@ -28,332 +18,319 @@ class GroupManagerUtility(BaseUtility):
             id="group_manager",
             name="Group Manager",
             description="View and manage group membership",
-            icon="👥",
+            icon="\U0001F465",
             category="Users & Groups",
             requires_group=True,
             tags=["groups", "users", "membership", "bulk"]
         )
 
     def init_state(self) -> None:
-        """Initialize utility state."""
-        if self.get_state('page') is None:
-            self.set_state('page', 'view')
-        if self.get_state('group_id') is None:
-            self.set_state('group_id', '')
-        if self.get_state('group_info') is None:
-            self.set_state('group_info', None)
-        if self.get_state('members') is None:
-            self.set_state('members', [])
+        for key, default in [('page', 'list'), ('group_id', ''),
+                             ('group_info', None), ('members', []),
+                             ('all_groups', None)]:
+            if self.get_state(key) is None:
+                self.set_state(key, default)
 
     def render_sidebar(self) -> None:
-        """Render sidebar controls."""
-        st.markdown("#### Group Selection")
-
-        # Group ID input
-        group_id = st.text_input(
-            "Group ID",
-            value=self.get_state('group_id', ''),
-            placeholder="Enter Group ID",
-            key="gm_group_id_input"
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Load", use_container_width=True, key="gm_load"):
-                self._load_group(group_id)
-        with col2:
-            if st.button("Clear", use_container_width=True, key="gm_clear"):
-                self._clear_group()
-
-        # Show current group
+        st.markdown("#### Group Manager")
         group_info = self.get_state('group_info')
         if group_info:
-            st.caption(f"**{group_info.get('name')}**")
-            members = self.get_state('members', [])
-            st.caption(f"{len(members)} members")
-
-        # Group search
-        with st.expander("🔍 Search Groups"):
-            query = st.text_input("Search", placeholder="Group name...", key="gm_search", label_visibility="collapsed")
-            if query:
-                groups = self.api.groups.search(query)
-                for g in groups[:8]:
-                    if st.button(g.get('name', 'Unknown'), key=f"gm_g_{g.get('id')}", use_container_width=True):
-                        self._load_group(g.get('id'))
-
-        st.markdown("---")
-
-        # Operations
-        st.markdown("#### Operations")
-
-        group_loaded = self.get_state('group_info') is not None
-
-        if st.button("📋 View Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_view"):
-            self.set_state('page', 'view')
-            st.rerun()
-
-        if st.button("➕ Add Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_add"):
-            self.set_state('page', 'add')
-            st.rerun()
-
-        if st.button("➖ Remove Members", use_container_width=True, disabled=not group_loaded, key="gm_nav_remove"):
-            self.set_state('page', 'remove')
-            st.rerun()
-
-        if st.button("📤 Export", use_container_width=True, disabled=not group_loaded, key="gm_nav_export"):
-            self.set_state('page', 'export')
-            st.rerun()
+            st.caption(f"Selected: **{group_info.get('name', '')}**")
+        pages = [
+            ("gm_nav_list", "\U0001F4CB All Groups", "list"),
+        ]
+        if group_info:
+            pages += [
+                ("gm_nav_detail", "\U0001F465 Members", "detail"),
+                ("gm_nav_add", "\U00002795 Add Members", "add"),
+                ("gm_nav_remove", "\U00002796 Remove Members", "remove"),
+                ("gm_nav_export", "\U0001F4E5 Export", "export"),
+            ]
+        for key, label, page in pages:
+            if st.button(label, use_container_width=True, key=key):
+                self.set_state('page', page)
+                st.rerun()
 
     def render_main(self) -> None:
-        """Render main content."""
         self.init_state()
+        page = self.get_state('page', 'list')
+        {'list': self._page_list, 'detail': self._page_detail,
+         'add': self._page_add, 'remove': self._page_remove,
+         'export': self._page_export}.get(page, self._page_list)()
 
-        group_info = self.get_state('group_info')
-
-        if not group_info:
-            st.markdown("## Group Manager")
-            st.info("Select a group from the sidebar to begin.")
-            return
-
-        page = self.get_state('page', 'view')
-
-        if page == 'view':
-            self._render_view_page()
-        elif page == 'add':
-            self._render_add_page()
-        elif page == 'remove':
-            self._render_remove_page()
-        elif page == 'export':
-            self._render_export_page()
-        else:
-            self._render_view_page()
+    # -- helpers --
 
     def _load_group(self, group_id: str) -> None:
-        """Load a group by ID."""
         if not group_id:
             return
-
-        with st.spinner("Loading group..."):
-            response = self.api.groups.get(group_id)
-            if response.success:
-                self.set_state('group_id', group_id)
-                self.set_state('group_info', response.data)
-                members = self.api.groups.get_members(group_id)
-                self.set_state('members', members)
-                st.rerun()
-            else:
-                st.error(f"Failed to load group: {response.error}")
-
-    def _clear_group(self) -> None:
-        """Clear current group selection."""
-        self.set_state('group_id', '')
-        self.set_state('group_info', None)
-        self.set_state('members', [])
-        st.rerun()
+        resp = self.api.groups.get(group_id)
+        if resp.success:
+            self.set_state('group_id', group_id)
+            self.set_state('group_info', resp.data)
+            self.set_state('members', self.api.groups.get_members(group_id))
+            self.set_state('page', 'detail')
+        else:
+            st.error(f"Failed to load group: {resp.error}")
 
     def _refresh_members(self) -> None:
-        """Refresh member list."""
-        group_id = self.get_state('group_id')
-        if group_id:
-            members = self.api.groups.get_members(group_id)
-            self.set_state('members', members)
+        gid = self.get_state('group_id')
+        if gid:
+            self.set_state('members', self.api.groups.get_members(gid))
 
-    def _render_view_page(self) -> None:
-        """Render view members page."""
-        group_info = self.get_state('group_info')
+    def _action_bar(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            return
+        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 5])
+        if c1.button("\U00002795", help="Add members", key="gm_ab_add"):
+            self.set_state('page', 'add')
+            st.rerun()
+        if c2.button("\U00002796", help="Remove members", key="gm_ab_rm"):
+            self.set_state('page', 'remove')
+            st.rerun()
+        if c3.button("\U0001F4E5", help="Export", key="gm_ab_exp"):
+            self.set_state('page', 'export')
+            st.rerun()
+        if c4.button("\U0001F504", help="Refresh", key="gm_ab_ref"):
+            self._refresh_members()
+            st.rerun()
+
+    def _group_header(self) -> None:
+        info = self.get_state('group_info')
         members = self.get_state('members', [])
+        c_back, c_title = st.columns([1, 8])
+        if c_back.button("\U00002B05", help="Back to list", key="gm_back"):
+            self.set_state('page', 'list')
+            st.rerun()
+        c_title.markdown(f"### {info.get('name', 'Group')}")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Members", len(members))
+        c2.metric("Type", info.get('type', 'N/A'))
+        c3.metric("Visibility", info.get('visibility', 'N/A'))
+        if info.get('description'):
+            st.caption(info['description'])
+        self._action_bar()
+        st.markdown("---")
 
-        st.markdown(f"## {group_info.get('name')}")
-        st.caption(f"{len(members)} members")
+    # -- pages --
 
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if st.button("🔄 Refresh"):
-                self._refresh_members()
-                st.rerun()
+    def _page_list(self) -> None:
+        st.markdown("## Groups")
+        all_groups = self.get_state('all_groups')
 
-        # Filter
-        search = st.text_input("Filter", placeholder="Search by name or email...")
+        if all_groups is None:
+            with st.spinner("Loading groups..."):
+                all_groups = list(self.api.groups.list(page_size=100))
+                self.set_state('all_groups', all_groups)
 
-        # Build dataframe
+        if not all_groups:
+            st.info("No groups found in your org.")
+            return
+
+        search = st.text_input("Search", placeholder="Filter by name...",
+                               key="gm_list_search", label_visibility="collapsed")
+
         df = pd.DataFrame([{
-            'Name': m.get('name', 'Unknown'),
-            'Email': m.get('email', 'N/A'),
-            'ID': m.get('id', '')
+            'Name': g.get('name', ''),
+            'Members': g.get('memberCount', 0),
+            'Type': g.get('type', ''),
+            'Visibility': g.get('visibility', ''),
+            'ID': g.get('id', ''),
+        } for g in all_groups])
+
+        if search and not df.empty:
+            df = df[df['Name'].str.contains(search, case=False, na=False)]
+
+        st.caption(f"{len(df)} groups")
+        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+
+        st.markdown("---")
+        st.markdown("##### Open a group")
+        filtered = all_groups
+        if search:
+            sl = search.lower()
+            filtered = [g for g in all_groups if sl in g.get('name', '').lower()]
+        options = {g.get('name', '?'): g.get('id') for g in filtered}
+        if options:
+            chosen = st.selectbox("Select group", list(options.keys()), key="gm_list_pick",
+                                  label_visibility="collapsed")
+            if st.button("Open", type="primary", key="gm_list_open"):
+                with st.spinner("Loading..."):
+                    self._load_group(options[chosen])
+                    st.rerun()
+
+    def _page_detail(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+
+        members = self.get_state('members', [])
+        search = st.text_input("Filter members", placeholder="Name or email...", key="gm_det_filter")
+
+        if not members:
+            st.info("This group has no members.")
+            return
+
+        df = pd.DataFrame([{
+            'Name': m.get('name', ''),
+            'Email': m.get('email', ''),
+            'Department': m.get('department', ''),
+            'ID': m.get('id', ''),
         } for m in members])
 
         if search and not df.empty:
-            mask = df['Name'].str.contains(search, case=False, na=False) | \
-                   df['Email'].str.contains(search, case=False, na=False)
+            mask = (df['Name'].str.contains(search, case=False, na=False) |
+                    df['Email'].str.contains(search, case=False, na=False))
             df = df[mask]
 
-        st.caption(f"Showing {len(df)} members")
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+        st.caption(f"Showing {len(df)} of {len(members)}")
+        st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
 
-    def _render_add_page(self) -> None:
-        """Render add members page."""
-        group_info = self.get_state('group_info')
-
-        st.markdown("## Add Members")
-        st.caption(f"Group: **{group_info.get('name')}**")
+    def _page_add(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+        st.markdown("### Add Members")
 
         tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
-
-        emails_input = ""
-
+        emails_text = ""
         with tab1:
-            emails_input = st.text_area(
-                "Enter emails (one per line)",
-                height=200,
-                placeholder="user1@example.com\nuser2@example.com",
-                key="gm_emails_paste"
+            emails_text = st.text_area(
+                "Emails (one per line)", height=180,
+                placeholder="alice@company.com\nbob@company.com", key="gm_paste"
             )
-
         with tab2:
-            uploaded = st.file_uploader("Upload CSV or TXT", type=['csv', 'txt'], key="gm_upload")
+            uploaded = st.file_uploader("CSV or TXT file", type=['csv', 'txt'], key="gm_upload")
             if uploaded:
                 content = uploaded.read().decode('utf-8')
-                emails_input = "\n".join([
+                emails_text = "\n".join(
                     line.split(',')[0].strip().strip('"')
-                    for line in content.split('\n')
-                    if '@' in line
-                ])
-                st.text_area("Emails from file:", value=emails_input, height=150, disabled=True)
+                    for line in content.split('\n') if '@' in line
+                )
+                st.code(emails_text, language=None)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            dry_run = st.checkbox("Preview only", value=True, key="gm_dry_run")
-        with col2:
-            if st.button("Process", type="primary", use_container_width=True, key="gm_process"):
-                if emails_input:
-                    self._process_add(emails_input, dry_run)
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="gm_dryrun")
+        run = c2.button("Process", type="primary", use_container_width=True, key="gm_run_add")
 
-    def _process_add(self, emails_input: str, dry_run: bool) -> None:
-        """Process adding members."""
-        emails = list(dict.fromkeys([
-            e.strip() for e in emails_input.split('\n')
-            if e.strip() and '@' in e
-        ]))
+        if run and emails_text:
+            self._execute_add(emails_text, dry_run)
 
+    def _execute_add(self, raw: str, dry_run: bool) -> None:
+        emails = list(dict.fromkeys(
+            e.strip() for e in raw.split('\n') if e.strip() and '@' in e
+        ))
         if not emails:
-            st.error("No valid emails found")
+            st.error("No valid email addresses found.")
             return
 
-        st.markdown("### Processing")
-
+        st.markdown("---")
         progress = st.progress(0)
-        found = []
-        not_found = []
-
+        found, missing = [], []
         for i, email in enumerate(emails):
             progress.progress((i + 1) / len(emails))
             user = self.api.users.search_by_email(email)
             if user:
-                found.append({'id': user['id'], 'name': user.get('name', 'Unknown'), 'email': email})
+                found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
             else:
-                not_found.append(email)
+                missing.append(email)
+        progress.empty()
 
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success(f"**{len(found)}** users found")
+            if found:
+                st.dataframe(pd.DataFrame(found)[['name', 'email']],
+                             hide_index=True, use_container_width=True)
+        with c2:
+            if missing:
+                st.error(f"**{len(missing)}** not found")
+                for e in missing:
+                    st.caption(f"- {e}")
 
-        with col1:
-            st.success(f"**Found:** {len(found)}")
-            for u in found:
-                st.caption(f"✓ {u['email']}")
+        if not found:
+            return
+        if dry_run:
+            st.info(f"Dry run complete. {len(found)} users would be added.")
+            return
 
-        with col2:
-            if not_found:
-                st.error(f"**Not found:** {len(not_found)}")
-                for e in not_found:
-                    st.caption(f"✗ {e}")
+        resp = self.api.groups.add_members(self.get_state('group_id'), [u['id'] for u in found])
+        if resp.success:
+            st.success(f"Added {len(found)} members to group.")
+            self._refresh_members()
+        else:
+            st.error(f"Failed: {resp.error}")
 
-        if found and not dry_run:
-            st.markdown("---")
-            group_id = self.get_state('group_id')
-            member_ids = [u['id'] for u in found]
-            response = self.api.groups.add_members(group_id, member_ids)
-            if response.success:
-                st.success(f"Added {len(found)} members")
-                self._refresh_members()
-            else:
-                st.error(response.error)
-        elif found and dry_run:
-            st.info("Preview complete. Uncheck 'Preview only' to add members.")
+    def _page_remove(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+        st.markdown("### Remove Members")
 
-    def _render_remove_page(self) -> None:
-        """Render remove members page."""
-        group_info = self.get_state('group_info')
         members = self.get_state('members', [])
+        if not members:
+            st.info("No members to remove.")
+            return
 
-        st.markdown("## Remove Members")
-        st.caption(f"Group: **{group_info.get('name')}** · {len(members)} members")
-
-        search = st.text_input("Filter", placeholder="Search...", key="gm_remove_filter")
-
+        search = st.text_input("Filter", placeholder="Search...", key="gm_rm_filter")
         filtered = members
         if search:
-            filtered = [
-                m for m in members
-                if search.lower() in m.get('name', '').lower() or
-                   search.lower() in m.get('email', '').lower()
-            ]
+            sl = search.lower()
+            filtered = [m for m in members
+                        if sl in m.get('name', '').lower() or sl in m.get('email', '').lower()]
 
-        options = {f"{m.get('name')} ({m.get('email')})": m.get('id') for m in filtered}
-
-        selected = st.multiselect("Select members to remove", options=list(options.keys()), key="gm_remove_select")
+        options = {f"{m.get('name', '?')} ({m.get('email', '?')})": m.get('id') for m in filtered}
+        selected = st.multiselect("Select members to remove", list(options.keys()), key="gm_rm_sel")
 
         if selected:
-            st.warning(f"⚠️ {len(selected)} member(s) selected")
-
-            confirm = st.checkbox("I confirm removal", key="gm_remove_confirm")
-
-            if st.button("Remove", type="primary", disabled=not confirm, key="gm_remove_btn"):
-                member_ids = [options[s] for s in selected]
-                response = self.api.groups.remove_members(self.get_state('group_id'), member_ids)
-                if response.success:
-                    st.success(f"Removed {len(selected)} members")
+            st.warning(f"{len(selected)} member(s) will be removed.")
+            confirm = st.checkbox("I confirm this removal", key="gm_rm_confirm")
+            if st.button("Remove Selected", type="primary", disabled=not confirm, key="gm_rm_btn"):
+                ids = [options[s] for s in selected]
+                resp = self.api.groups.remove_members(self.get_state('group_id'), ids)
+                if resp.success:
+                    st.success(f"Removed {len(selected)} members.")
                     self._refresh_members()
                     st.rerun()
                 else:
-                    st.error(response.error)
+                    st.error(f"Failed: {resp.error}")
 
-    def _render_export_page(self) -> None:
-        """Render export page."""
-        group_info = self.get_state('group_info')
+    def _page_export(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+        st.markdown("### Export")
+
         members = self.get_state('members', [])
-
-        st.markdown("## Export Members")
-        st.caption(f"Group: **{group_info.get('name')}** · {len(members)} members")
+        name = info.get('name', 'group')
 
         df = pd.DataFrame([{
-            'Name': m.get('name', 'Unknown'),
-            'Email': m.get('email', 'N/A'),
-            'ID': m.get('id', '')
+            'Name': m.get('name', ''), 'Email': m.get('email', ''),
+            'Department': m.get('department', ''), 'ID': m.get('id', ''),
         } for m in members])
 
-        st.markdown("### Download Options")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.download_button(
-                "📥 CSV (Full)",
-                data=df.to_csv(index=False),
-                file_name=f"{group_info.get('name', 'group')}_members.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="gm_export_csv"
-            )
-
-        with col2:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download CSV", data=df.to_csv(index=False),
+                               file_name=f"{name}_members.csv", mime="text/csv",
+                               use_container_width=True, key="gm_dl_csv")
+        with c2:
             emails = "\n".join(df['Email'].dropna().tolist())
-            st.download_button(
-                "📥 Emails Only",
-                data=emails,
-                file_name=f"{group_info.get('name', 'group')}_emails.txt",
-                mime="text/plain",
-                use_container_width=True,
-                key="gm_export_emails"
-            )
+            st.download_button("Download Emails", data=emails,
+                               file_name=f"{name}_emails.txt", mime="text/plain",
+                               use_container_width=True, key="gm_dl_email")
 
         st.markdown("### Preview")
-        st.dataframe(df.head(20), use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)

@@ -241,6 +241,14 @@ class UsersAPI:
             return results[0] if results else None
         return None
 
+    def get_queues(self, user_id: str) -> List[Dict]:
+        """Get queues a user belongs to."""
+        return list(self._client.paginate(f'/api/v2/users/{user_id}/queues'))
+
+    def get_groups(self, user_id: str) -> APIResponse:
+        """Get groups a user belongs to."""
+        return self._client.get(f'/api/v2/users/{user_id}/groups')
+
     def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
         """
         List all users.
@@ -361,6 +369,16 @@ class QueuesAPI:
     def get_members(self, queue_id: str) -> List[Dict]:
         """Get queue members."""
         return list(self._client.paginate(f'/api/v2/routing/queues/{queue_id}/members'))
+
+    def add_members(self, queue_id: str, member_ids: List[str]) -> APIResponse:
+        """Add members to a queue."""
+        body = [{"id": uid, "joined": True} for uid in member_ids]
+        return self._client.post(f'/api/v2/routing/queues/{queue_id}/members', json=body)
+
+    def remove_members(self, queue_id: str, member_ids: List[str]) -> APIResponse:
+        """Remove members from a queue."""
+        body = [{"id": uid, "joined": False} for uid in member_ids]
+        return self._client.post(f'/api/v2/routing/queues/{queue_id}/members', json=body)
 
     def list(self, page_size: int = 100) -> Generator[Dict, None, None]:
         """List all queues."""
