@@ -96,10 +96,8 @@ class SkillManagerUtility(BaseUtility):
             st.info("No skills found in your org.")
             return
 
-        c1, c2 = st.columns(2)
-        c1.metric("Total Skills", len(skills))
         active = sum(1 for s in skills if s.get('state') == 'active')
-        c2.metric("Active", active)
+        st.caption(f"{len(skills)} skills ({active} active)")
 
         search = st.text_input("Search", placeholder="Filter skills...",
                                key="sm_list_search", label_visibility="collapsed")
@@ -113,7 +111,6 @@ class SkillManagerUtility(BaseUtility):
         if search and not df.empty:
             df = df[df['Name'].str.contains(search, case=False, na=False)]
 
-        st.caption(f"Showing {len(df)} of {len(skills)} skills")
         st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
 
     def _page_user_skills(self) -> None:
@@ -139,10 +136,11 @@ class SkillManagerUtility(BaseUtility):
         if user_info:
             st.markdown("---")
             st.markdown(f"### {user_info.get('name', 'Unknown')}")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Skills", len(user_skills))
-            c2.caption(f"**Email:** {user_info.get('email', '')}")
-            c3.caption(f"**ID:** {user_info.get('id', '')}")
+            st.markdown(
+                f"{len(user_skills)} skill(s) · "
+                f"{user_info.get('email', '')} · "
+                f"ID: {user_info.get('id', '')}"
+            )
 
             if user_skills:
                 df = pd.DataFrame([{

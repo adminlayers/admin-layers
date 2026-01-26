@@ -51,6 +51,25 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
+    /* Fix Material Design icon ligature text showing when font fails to load */
+    [data-testid="collapsedControl"] {
+        overflow: hidden !important;
+        max-width: 2.5rem;
+    }
+    [data-testid="collapsedControl"] span {
+        font-size: 0 !important;
+    }
+    [data-testid="collapsedControl"]::after {
+        content: "\\00BB";
+        font-size: 1.5rem;
+    }
+
+    /* Fix expander arrow icon text */
+    [data-testid="stExpander"] details summary svg {
+        overflow: hidden;
+        max-width: 1rem;
+    }
+
     [data-testid="stSidebar"] {
         background-color: #1a2632;
     }
@@ -100,17 +119,24 @@ st.markdown("""
         font-size: 0.85rem;
     }
 
-    .utility-card {
-        border: 1px solid #344758;
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        background: #283848;
+    /* Compact info row for detail headers */
+    .info-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 0.5rem 0;
+        font-size: 0.9rem;
     }
-
-    .utility-card:hover {
-        border-color: #1cb3e0;
-        box-shadow: 0 2px 8px rgba(28,179,224,0.15);
+    .info-row .info-item {
+        color: #ccc;
+    }
+    .info-row .info-label {
+        color: #8899aa;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+    .info-row .info-value {
+        font-weight: 600;
     }
 
     .storage-info {
