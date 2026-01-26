@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Genesys Cloud Utilities Suite
+Admin Layers - Genesys Cloud Utilities Suite
 Modular utilities for Genesys Cloud administration.
+Supports hosted deployment on Streamlit Community Cloud with encrypted storage.
 """
 
 import streamlit as st
@@ -9,6 +10,8 @@ from typing import Dict, Type
 
 # Core modules
 from genesys_cloud import GenesysAuth, GenesysCloudAPI, load_config, get_regions
+from core.encrypted_storage import get_storage
+from core.demo import DemoAPI, is_demo_mode, set_demo_mode
 
 # Utilities
 from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, QueueManagerUtility
@@ -17,17 +20,14 @@ from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, Que
 # Configuration
 # =============================================================================
 
-APP_NAME = "Genesys Cloud Utilities"
-APP_VERSION = "1.0.0"
+APP_NAME = "Admin Layers"
+APP_VERSION = "1.1.0"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
     "group_manager": GroupManagerUtility,
     "skill_manager": SkillManagerUtility,
     "queue_manager": QueueManagerUtility,
-    # Add more utilities as they're created:
-    # "user_manager": UserManagerUtility,
-    # "conversation_tools": ConversationToolsUtility,
 }
 
 # =============================================================================
@@ -36,7 +36,7 @@ UTILITIES: Dict[str, Type[BaseUtility]] = {
 
 st.set_page_config(
     page_title=APP_NAME,
-    page_icon="âš™ï¸",
+    page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -51,13 +51,13 @@ st.markdown("""
     footer {visibility: hidden;}
 
     [data-testid="stSidebar"] {
-        background-color: #F8F9FA;
+        background-color: #1a2632;
     }
 
     .nav-header {
         font-size: 0.7rem;
         font-weight: 600;
-        color: #6C757D;
+        color: #8899aa;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin: 1.25rem 0 0.5rem 0;
@@ -68,29 +68,54 @@ st.markdown("""
         border-radius: 4px;
         font-size: 0.8rem;
         font-weight: 500;
+        display: inline-block;
     }
 
     .status-connected {
-        background: #D4EDDA;
-        color: #155724;
+        background: #1e3a2f;
+        color: #4ade80;
+        border: 1px solid #2d5a3f;
+    }
+
+    .status-demo {
+        background: #3a2e1e;
+        color: #fbbf24;
+        border: 1px solid #5a4a2d;
     }
 
     .status-disconnected {
-        background: #F8D7DA;
-        color: #721C24;
+        background: #3a1e1e;
+        color: #f87171;
+        border: 1px solid #5a2d2d;
+    }
+
+    .demo-banner {
+        background: linear-gradient(135deg, #2d1f0e 0%, #3a2e1e 100%);
+        border: 1px solid #5a4a2d;
+        border-radius: 6px;
+        padding: 8px 16px;
+        margin-bottom: 16px;
+        color: #fbbf24;
+        font-size: 0.85rem;
     }
 
     .utility-card {
-        border: 1px solid #DEE2E6;
+        border: 1px solid #344758;
         border-radius: 8px;
         padding: 1rem;
         margin: 0.5rem 0;
-        background: #FFFFFF;
+        background: #283848;
     }
 
     .utility-card:hover {
-        border-color: #4A6FA5;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-color: #1cb3e0;
+        box-shadow: 0 2px 8px rgba(28,179,224,0.15);
+    }
+
+    .storage-info {
+        font-size: 0.75rem;
+        color: #8899aa;
+        padding: 4px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -106,7 +131,8 @@ def init_session_state():
         'auth': None,
         'api': None,
         'current_utility': None,
-        'page': 'home'
+        'page': 'home',
+        'demo_mode': False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -114,10 +140,11 @@ def init_session_state():
 
 
 def try_auto_auth():
-    """Attempt auto-authentication from environment."""
+    """Attempt auto-authentication from environment or encrypted storage."""
     if st.session_state.authenticated:
         return
 
+    # Try environment variables / config file first
     auth = GenesysAuth.from_config()
     if auth:
         success, _ = auth.authenticate()
@@ -125,6 +152,40 @@ def try_auto_auth():
             st.session_state.authenticated = True
             st.session_state.auth = auth
             st.session_state.api = GenesysCloudAPI(auth)
+            return
+
+    # Try encrypted storage
+    storage = get_storage()
+    creds = storage.retrieve_credentials()
+    if creds:
+        auth = GenesysAuth.from_credentials(
+            creds["client_id"],
+            creds["client_secret"],
+            creds.get("region", "mypurecloud.com")
+        )
+        success, _ = auth.authenticate()
+        if success:
+            st.session_state.authenticated = True
+            st.session_state.auth = auth
+            st.session_state.api = GenesysCloudAPI(auth)
+
+
+def activate_demo_mode():
+    """Activate demo mode with mock API."""
+    set_demo_mode(True)
+    st.session_state.authenticated = True
+    st.session_state.auth = None
+    st.session_state.api = DemoAPI()
+
+
+def deactivate_session():
+    """Clear all session and auth state."""
+    set_demo_mode(False)
+    st.session_state.authenticated = False
+    st.session_state.auth = None
+    st.session_state.api = None
+    st.session_state.current_utility = None
+    st.session_state.page = 'home'
 
 
 # =============================================================================
@@ -134,20 +195,31 @@ def try_auto_auth():
 def render_sidebar():
     """Render main sidebar."""
     with st.sidebar:
-        st.markdown(f"### âš™ï¸ {APP_NAME}")
+        st.markdown(f"### ⚙️ {APP_NAME}")
 
         # Connection status
-        if st.session_state.authenticated:
-            st.markdown('<span class="status-badge status-connected">â— Connected</span>', unsafe_allow_html=True)
+        if is_demo_mode():
+            st.markdown(
+                '<span class="status-badge status-demo">◉ Demo Mode</span>',
+                unsafe_allow_html=True
+            )
+        elif st.session_state.authenticated:
+            st.markdown(
+                '<span class="status-badge status-connected">◉ Connected</span>',
+                unsafe_allow_html=True
+            )
         else:
-            st.markdown('<span class="status-badge status-disconnected">â— Disconnected</span>', unsafe_allow_html=True)
+            st.markdown(
+                '<span class="status-badge status-disconnected">◉ Disconnected</span>',
+                unsafe_allow_html=True
+            )
 
         st.markdown("---")
 
         # Navigation
         st.markdown('<p class="nav-header">Navigation</p>', unsafe_allow_html=True)
 
-        if st.button("ðŸ  Home", use_container_width=True, key="nav_home"):
+        if st.button("🏠 Home", use_container_width=True, key="nav_home"):
             st.session_state.page = 'home'
             st.session_state.current_utility = None
             st.rerun()
@@ -168,9 +240,6 @@ def render_sidebar():
 
         for category, utils in sorted(categories.items()):
             for util_id, util_class, config in utils:
-                is_active = st.session_state.current_utility == util_id
-                btn_type = "primary" if is_active else "secondary"
-
                 if st.button(
                     f"{config.icon} {config.name}",
                     use_container_width=True,
@@ -187,19 +256,25 @@ def render_sidebar():
         st.markdown('<p class="nav-header">Settings</p>', unsafe_allow_html=True)
 
         if st.session_state.authenticated:
-            region = st.session_state.auth.config.region if st.session_state.auth else "Unknown"
-            st.caption(f"Region: {region}")
+            if is_demo_mode():
+                st.caption("Mode: Demo (sample data)")
+            else:
+                region = st.session_state.auth.config.region if st.session_state.auth else "Unknown"
+                st.caption(f"Region: {region}")
 
-            if st.button("ðŸ”“ Disconnect", use_container_width=True, key="nav_disconnect"):
-                st.session_state.authenticated = False
-                st.session_state.auth = None
-                st.session_state.api = None
-                st.session_state.current_utility = None
+            if st.button("🔓 Disconnect", use_container_width=True, key="nav_disconnect"):
+                deactivate_session()
                 st.rerun()
         else:
-            if st.button("ðŸ”‘ Connect", use_container_width=True, key="nav_connect"):
+            if st.button("🔑 Connect", use_container_width=True, key="nav_connect"):
                 st.session_state.page = 'connect'
                 st.rerun()
+
+        # Storage info
+        if st.button("🔒 Storage Info", use_container_width=True, key="nav_storage"):
+            st.session_state.page = 'storage_info'
+            st.session_state.current_utility = None
+            st.rerun()
 
         # Version
         st.markdown("---")
@@ -228,22 +303,68 @@ def render_utility_sidebar():
 
 def page_home():
     """Home page."""
-    st.markdown("## Welcome")
+    # Demo mode banner
+    if is_demo_mode():
+        st.markdown(
+            '<div class="demo-banner">'
+            '⚡ <strong>Demo Mode</strong> — '
+            'Exploring with sample data. No real Genesys Cloud connection. '
+            'Connect with real credentials to manage your org.'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
+    st.markdown("## Welcome to Admin Layers")
 
     if not st.session_state.authenticated:
-        st.warning("Connect to Genesys Cloud to get started.")
+        st.markdown(
+            "Bulk administration tools for Genesys Cloud. "
+            "Connect with your credentials or try demo mode."
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Connect to Your Org")
+            st.markdown(
+                "Use your Genesys Cloud OAuth credentials "
+                "to manage groups, skills, and queues."
+            )
+            if st.button("🔑 Connect", use_container_width=True, key="home_connect"):
+                st.session_state.page = 'connect'
+                st.rerun()
+
+        with col2:
+            st.markdown("#### Try Demo Mode")
+            st.markdown(
+                "Explore the interface with sample data. "
+                "No credentials required."
+            )
+            if st.button("⚡ Launch Demo", use_container_width=True, key="home_demo"):
+                activate_demo_mode()
+                st.rerun()
+
+        st.markdown("---")
 
         with st.expander("About this application"):
             st.markdown(f"""
-            **{APP_NAME}** provides a collection of utilities for managing
-            Genesys Cloud resources.
+**{APP_NAME}** provides modular utilities for managing
+Genesys Cloud resources with bulk operations, dry-run previews,
+and encrypted local storage.
 
-            **Available Utilities:**
+**Available Utilities:**
             """)
 
             for util_id, util_class in UTILITIES.items():
                 config = util_class.get_config()
                 st.markdown(f"- {config.icon} **{config.name}**: {config.description}")
+
+            st.markdown("""
+**Security:**
+- All credentials are encrypted at rest (AES-128-CBC + HMAC-SHA256)
+- Direct API calls to Genesys Cloud (no proxy)
+- No data passes through third-party servers
+- Full audit trail stored locally
+            """)
 
         return
 
@@ -273,45 +394,106 @@ def page_connect():
     """Connection page."""
     st.markdown("## Connect to Genesys Cloud")
 
-    config = load_config()
+    tab1, tab2 = st.tabs(["🔑 Credentials", "⚡ Demo Mode"])
 
-    with st.form("connect_form"):
-        client_id = st.text_input(
-            "Client ID",
-            value=config.client_id if config else '',
-            type="password"
-        )
+    with tab1:
+        config = load_config()
 
-        client_secret = st.text_input(
-            "Client Secret",
-            value=config.client_secret if config else '',
-            type="password"
-        )
+        # Check encrypted storage for saved credentials
+        storage = get_storage()
+        saved_creds = storage.retrieve_credentials()
 
-        regions = get_regions()
-        default_region = config.region if config else 'mypurecloud.com'
-        idx = regions.index(default_region) if default_region in regions else 0
-        region = st.selectbox("Region", regions, index=idx)
+        with st.form("connect_form"):
+            client_id = st.text_input(
+                "Client ID",
+                value=(saved_creds or {}).get("client_id", "") or (config.client_id if config else ''),
+                type="password"
+            )
 
-        if st.form_submit_button("Connect", use_container_width=True):
-            if client_id and client_secret:
-                auth = GenesysAuth.from_credentials(client_id, client_secret, region)
-                success, message = auth.authenticate()
+            client_secret = st.text_input(
+                "Client Secret",
+                value=(saved_creds or {}).get("client_secret", "") or (config.client_secret if config else ''),
+                type="password"
+            )
 
-                if success:
-                    st.session_state.authenticated = True
-                    st.session_state.auth = auth
-                    st.session_state.api = GenesysCloudAPI(auth)
-                    st.session_state.page = 'home'
-                    st.rerun()
+            regions = get_regions()
+            default_region = (
+                (saved_creds or {}).get("region") or
+                (config.region if config else 'mypurecloud.com')
+            )
+            idx = regions.index(default_region) if default_region in regions else 0
+            region = st.selectbox("Region", regions, index=idx)
+
+            remember = st.checkbox(
+                "Remember credentials (encrypted)",
+                value=saved_creds is not None,
+                help="Credentials are encrypted using AES-128-CBC with HMAC-SHA256"
+            )
+
+            if st.form_submit_button("Connect", use_container_width=True):
+                if client_id and client_secret:
+                    auth = GenesysAuth.from_credentials(client_id, client_secret, region)
+                    success, message = auth.authenticate()
+
+                    if success:
+                        if remember:
+                            storage.store_credentials(client_id, client_secret, region)
+                        else:
+                            storage.clear_credentials()
+
+                        set_demo_mode(False)
+                        st.session_state.authenticated = True
+                        st.session_state.auth = auth
+                        st.session_state.api = GenesysCloudAPI(auth)
+                        st.session_state.page = 'home'
+                        st.rerun()
+                    else:
+                        st.error(message)
                 else:
-                    st.error(message)
-            else:
-                st.error("Enter Client ID and Client Secret")
+                    st.error("Enter Client ID and Client Secret")
+
+        if saved_creds:
+            if st.button("🗑️ Clear Saved Credentials", key="clear_saved"):
+                storage.clear_credentials()
+                st.success("Saved credentials cleared")
+                st.rerun()
+
+    with tab2:
+        st.markdown("### Demo Mode")
+        st.markdown(
+            "Explore Admin Layers with realistic sample data. "
+            "No Genesys Cloud credentials required."
+        )
+
+        st.markdown("""
+**Demo includes:**
+- 30 sample users across Support, Sales, Engineering, QA, and HR
+- 5 groups (Tier 1 Support, Tier 2 Support, Sales Team, All Hands, Weekend Coverage)
+- 5 queues (General Support, Billing, Sales Inbound, Technical, VIP)
+- 12 routing skills with user assignments
+        """)
+
+        st.info(
+            "Demo mode uses simulated data. No API calls are made. "
+            "All operations (add/remove) succeed without side effects."
+        )
+
+        if st.button("⚡ Launch Demo Mode", type="primary", use_container_width=True, key="connect_demo"):
+            activate_demo_mode()
+            st.rerun()
 
 
 def page_utility():
     """Utility page."""
+    # Demo mode banner
+    if is_demo_mode():
+        st.markdown(
+            '<div class="demo-banner">'
+            '⚡ <strong>Demo Mode</strong> — Sample data only'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
     util_id = st.session_state.current_utility
 
     if not util_id or util_id not in UTILITIES:
@@ -322,6 +504,79 @@ def page_utility():
     util_class = UTILITIES[util_id]
     utility = util_class(st.session_state.api)
     utility.render_main()
+
+
+def page_storage_info():
+    """Storage information page."""
+    st.markdown("## Storage & Security")
+
+    storage = get_storage()
+    info = storage.get_storage_info()
+
+    st.markdown("### Encryption")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Algorithm:**")
+        st.markdown("**Key Source:**")
+        st.markdown("**Persistent:**")
+    with col2:
+        st.markdown(info["encryption"])
+        st.markdown(info["key_source"])
+        st.markdown("Yes" if info["persistent"] else "No (session only)")
+
+    st.markdown("### Storage Backend")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Backend:**")
+        if info["storage_dir"]:
+            st.markdown("**Location:**")
+    with col2:
+        st.markdown(info["backend"])
+        if info["storage_dir"]:
+            st.markdown(f"`{info['storage_dir']}`")
+
+    st.markdown("---")
+
+    st.markdown("### How It Works")
+    st.markdown("""
+**Credential Storage:**
+- Credentials are encrypted using Fernet symmetric encryption (AES-128-CBC + HMAC-SHA256)
+- Encrypted data stored locally on disk when available, otherwise in session state
+- Encryption key sourced from `st.secrets`, environment variable, or auto-generated per session
+
+**Session Data:**
+- Session state managed by Streamlit's built-in session management
+- Each browser tab gets an isolated session
+- Session data is cleared when the tab closes
+
+**Action History:**
+- All operations logged locally in encrypted storage
+- History retained for audit and rollback purposes
+- Maximum 500 records maintained
+
+**Hosted Deployment (Streamlit Community Cloud):**
+- Set `encryption_key` in Streamlit Secrets for persistent encrypted storage
+- Credentials entered through the UI are encrypted in session state
+- No credentials or data are transmitted to third parties
+    """)
+
+    st.markdown("---")
+
+    # Saved credentials management
+    st.markdown("### Saved Data")
+
+    creds = storage.retrieve_credentials()
+    if creds:
+        st.success("Encrypted credentials found")
+        st.caption(f"Stored at: {creds.get('stored_at', 'Unknown')}")
+        st.caption(f"Region: {creds.get('region', 'Unknown')}")
+
+        if st.button("🗑️ Clear Saved Credentials", key="storage_clear_creds"):
+            storage.clear_credentials()
+            st.success("Credentials cleared")
+            st.rerun()
+    else:
+        st.info("No saved credentials")
 
 
 # =============================================================================
@@ -348,6 +603,8 @@ def main():
         page_connect()
     elif page == 'utility':
         page_utility()
+    elif page == 'storage_info':
+        page_storage_info()
     else:
         page_home()
 

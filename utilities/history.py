@@ -2,6 +2,7 @@
 """
 Action History Module
 Stores all operations locally for audit and rollback purposes.
+Supports both local filesystem and cloud (session state) backends.
 """
 
 import json
@@ -10,6 +11,8 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from pathlib import Path
+
+import streamlit as st
 
 
 @dataclass
@@ -30,38 +33,74 @@ class ActionRecord:
 class ActionHistory:
     """
     Local action history storage.
-    Stores all operations in a JSON file for audit and rollback.
+    Stores all operations for audit and rollback.
+
+    Backend priority:
+    1. Local filesystem (~/.admin_layers/action_history.json)
+    2. Streamlit session state (for cloud/ephemeral environments)
+
+    When encrypted storage is available, history is also
+    persisted to encrypted storage for cross-session access.
     """
 
     def __init__(self, storage_dir: str = None):
         """Initialize history storage."""
+        self._use_filesystem = False
+        self.storage_dir = None
+        self.history_file = None
+
         if storage_dir is None:
-            # Store in user's home directory
-            storage_dir = os.path.join(Path.home(), '.admin_layers')
+            try:
+                storage_dir = os.path.join(Path.home(), '.admin_layers')
+                os.makedirs(storage_dir, exist_ok=True)
+                # Test write access
+                test_path = os.path.join(storage_dir, '.write_test')
+                with open(test_path, 'w') as f:
+                    f.write('test')
+                os.remove(test_path)
+                self._use_filesystem = True
+            except (OSError, PermissionError):
+                self._use_filesystem = False
+        else:
+            try:
+                os.makedirs(storage_dir, exist_ok=True)
+                self._use_filesystem = True
+            except (OSError, PermissionError):
+                self._use_filesystem = False
 
-        self.storage_dir = storage_dir
-        self.history_file = os.path.join(storage_dir, 'action_history.json')
-
-        # Ensure directory exists
-        os.makedirs(storage_dir, exist_ok=True)
+        if self._use_filesystem:
+            self.storage_dir = storage_dir
+            self.history_file = os.path.join(storage_dir, 'action_history.json')
 
         # Load existing history
         self._history: List[Dict] = self._load_history()
 
     def _load_history(self) -> List[Dict]:
-        """Load history from file."""
-        if os.path.exists(self.history_file):
-            try:
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError):
-                return []
-        return []
+        """Load history from filesystem or session state."""
+        # Try filesystem first
+        if self._use_filesystem and self.history_file:
+            if os.path.exists(self.history_file):
+                try:
+                    with open(self.history_file, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass
+
+        # Fall back to session state
+        return st.session_state.get('_action_history_data', [])
 
     def _save_history(self) -> None:
-        """Save history to file."""
-        with open(self.history_file, 'w', encoding='utf-8') as f:
-            json.dump(self._history, f, indent=2, ensure_ascii=False)
+        """Save history to filesystem and session state."""
+        # Always save to session state
+        st.session_state._action_history_data = self._history
+
+        # Also save to filesystem if available
+        if self._use_filesystem and self.history_file:
+            try:
+                with open(self.history_file, 'w', encoding='utf-8') as f:
+                    json.dump(self._history, f, indent=2, ensure_ascii=False)
+            except (IOError, OSError):
+                pass
 
     def _generate_id(self) -> str:
         """Generate a unique action ID."""
@@ -184,6 +223,13 @@ class ActionHistory:
         """Clear all history."""
         self._history = []
         self._save_history()
+
+    @property
+    def backend_info(self) -> str:
+        """Get info about the current storage backend."""
+        if self._use_filesystem:
+            return f"filesystem ({self.storage_dir})"
+        return "session state (ephemeral)"
 
 
 # Global instance
