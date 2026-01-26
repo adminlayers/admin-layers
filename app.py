@@ -14,7 +14,7 @@ from core.encrypted_storage import get_storage
 from core.demo import DemoAPI, is_demo_mode, set_demo_mode
 
 # Utilities
-from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, QueueManagerUtility
+from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, QueueManagerUtility, UserManagerUtility
 
 # =============================================================================
 # Configuration
@@ -26,6 +26,7 @@ APP_VERSION = "1.1.0"
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
     "group_manager": GroupManagerUtility,
+    "user_manager": UserManagerUtility,
     "skill_manager": SkillManagerUtility,
     "queue_manager": QueueManagerUtility,
 }

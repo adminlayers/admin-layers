@@ -1,6 +1,6 @@
 """
 Queue Manager Utility
-Manage queue membership in Genesys Cloud.
+View and manage queue membership in Genesys Cloud.
 """
 
 import streamlit as st
@@ -11,49 +11,30 @@ from .base import BaseUtility, UtilityConfig
 
 
 class QueueManagerUtility(BaseUtility):
-    """
-    Utility for managing Genesys Cloud queue membership.
-
-    Features:
-    - View queue members
-    - Search queues
-    - View queue configuration
-    - Export queue data
-    """
 
     @staticmethod
     def get_config() -> UtilityConfig:
         return UtilityConfig(
             id="queue_manager",
             name="Queue Manager",
-            description="View and manage queue membership",
-            icon="📞",
+            description="View and manage queue membership and configuration",
+            icon="\U0001F4DE",
             category="Routing",
             requires_queue=True,
             tags=["queues", "routing", "membership", "agents"]
         )
 
     def init_state(self) -> None:
-        """Initialize utility state."""
-        if self.get_state('page') is None:
-            self.set_state('page', 'view')
-        if self.get_state('queue_id') is None:
-            self.set_state('queue_id', '')
-        if self.get_state('queue_info') is None:
-            self.set_state('queue_info', None)
-        if self.get_state('members') is None:
-            self.set_state('members', [])
+        for key, default in [('page', 'view'), ('queue_id', ''), ('queue_info', None), ('members', [])]:
+            if self.get_state(key) is None:
+                self.set_state(key, default)
 
     def render_sidebar(self) -> None:
-        """Render sidebar controls."""
         st.markdown("#### Queue Selection")
 
-        # Queue ID input
         queue_id = st.text_input(
-            "Queue ID",
-            value=self.get_state('queue_id', ''),
-            placeholder="Enter Queue ID",
-            key="qm_queue_id_input"
+            "Queue ID", value=self.get_state('queue_id', ''),
+            placeholder="Paste a Queue ID", key="qm_queue_id_input"
         )
 
         col1, col2 = st.columns(2)
@@ -64,241 +45,362 @@ class QueueManagerUtility(BaseUtility):
             if st.button("Clear", use_container_width=True, key="qm_clear"):
                 self._clear_queue()
 
-        # Show current queue
         queue_info = self.get_state('queue_info')
         if queue_info:
-            st.caption(f"**{queue_info.get('name')}**")
-            members = self.get_state('members', [])
-            st.caption(f"{len(members)} members")
+            st.caption(f"**{queue_info.get('name', '')}**")
+            st.caption(f"{len(self.get_state('members', []))} members loaded")
 
-        # Queue search
-        with st.expander("🔍 Search Queues"):
-            query = st.text_input("Search", placeholder="Queue name...", key="qm_search", label_visibility="collapsed")
+        with st.expander("Search Queues"):
+            query = st.text_input("Name", placeholder="Type queue name...", key="qm_search", label_visibility="collapsed")
             if query:
-                queues = self.api.queues.search(query)
-                for q in queues[:8]:
-                    if st.button(q.get('name', 'Unknown'), key=f"qm_q_{q.get('id')}", use_container_width=True):
+                results = self.api.queues.search(query)
+                if not results:
+                    st.caption("No queues found")
+                for q in results[:10]:
+                    label = f"{q.get('name', '?')} ({q.get('memberCount', '?')} agents)"
+                    if st.button(label, key=f"qm_q_{q.get('id')}", use_container_width=True):
                         self._load_queue(q.get('id'))
 
         st.markdown("---")
+        st.markdown("#### Actions")
+        loaded = self.get_state('queue_info') is not None
+        for key, icon, label, page in [
+            ("qm_nav_view", "\U0001F4CB", "View Members", "view"),
+            ("qm_nav_add", "\U00002795", "Add Members", "add"),
+            ("qm_nav_remove", "\U00002796", "Remove Members", "remove"),
+            ("qm_nav_config", "\U00002699\uFE0F", "Queue Config", "config"),
+            ("qm_nav_export", "\U0001F4E4", "Export", "export"),
+        ]:
+            if st.button(f"{icon} {label}", use_container_width=True, disabled=not loaded, key=key):
+                self.set_state('page', page)
+                st.rerun()
 
-        # Operations
-        st.markdown("#### Views")
-
-        queue_loaded = self.get_state('queue_info') is not None
-
-        if st.button("📋 View Members", use_container_width=True, disabled=not queue_loaded, key="qm_nav_view"):
-            self.set_state('page', 'view')
-            st.rerun()
-
-        if st.button("⚙️ Queue Config", use_container_width=True, disabled=not queue_loaded, key="qm_nav_config"):
-            self.set_state('page', 'config')
-            st.rerun()
-
-        if st.button("📤 Export", use_container_width=True, disabled=not queue_loaded, key="qm_nav_export"):
-            self.set_state('page', 'export')
-            st.rerun()
-
-        if st.button("📊 All Queues", use_container_width=True, key="qm_nav_all"):
+        if st.button("\U0001F4CA All Queues", use_container_width=True, key="qm_nav_all"):
             self.set_state('page', 'all_queues')
             st.rerun()
 
     def render_main(self) -> None:
-        """Render main content."""
         self.init_state()
-
         queue_info = self.get_state('queue_info')
         page = self.get_state('page', 'view')
 
         if page == 'all_queues':
-            self._render_all_queues_page()
-        elif not queue_info:
+            self._page_all_queues()
+            return
+        if not queue_info:
             st.markdown("## Queue Manager")
-            st.info("Select a queue from the sidebar to begin, or view All Queues.")
-        elif page == 'view':
-            self._render_view_page()
-        elif page == 'config':
-            self._render_config_page()
-        elif page == 'export':
-            self._render_export_page()
-        else:
-            self._render_view_page()
-
-    def _load_queue(self, queue_id: str) -> None:
-        """Load a queue by ID."""
-        if not queue_id:
+            st.info("Search for a queue or paste a Queue ID in the sidebar.")
+            self._page_all_queues()
             return
 
+        pages = {
+            'view': self._page_view, 'add': self._page_add,
+            'remove': self._page_remove, 'config': self._page_config,
+            'export': self._page_export,
+        }
+        pages.get(page, self._page_view)()
+
+    # -- data helpers --
+
+    def _load_queue(self, queue_id: str) -> None:
+        if not queue_id:
+            return
         with st.spinner("Loading queue..."):
-            response = self.api.queues.get(queue_id)
-            if response.success:
+            resp = self.api.queues.get(queue_id)
+            if resp.success:
                 self.set_state('queue_id', queue_id)
-                self.set_state('queue_info', response.data)
-                members = self.api.queues.get_members(queue_id)
-                self.set_state('members', members)
+                self.set_state('queue_info', resp.data)
+                self.set_state('members', self.api.queues.get_members(queue_id))
+                self.set_state('page', 'view')
                 st.rerun()
             else:
-                self.show_error(f"Failed to load queue: {response.error}")
+                st.error(f"Failed to load queue: {resp.error}")
 
     def _clear_queue(self) -> None:
-        """Clear current queue selection."""
-        self.set_state('queue_id', '')
-        self.set_state('queue_info', None)
-        self.set_state('members', [])
+        for key, val in [('queue_id', ''), ('queue_info', None), ('members', [])]:
+            self.set_state(key, val)
         st.rerun()
 
     def _refresh_members(self) -> None:
-        """Refresh member list."""
-        queue_id = self.get_state('queue_id')
-        if queue_id:
-            members = self.api.queues.get_members(queue_id)
-            self.set_state('members', members)
+        qid = self.get_state('queue_id')
+        if qid:
+            self.set_state('members', self.api.queues.get_members(qid))
 
-    def _render_view_page(self) -> None:
-        """Render view members page."""
-        queue_info = self.get_state('queue_info')
+    def _queue_header(self) -> None:
+        info = self.get_state('queue_info')
+        members = self.get_state('members', [])
+        st.markdown(f"## {info.get('name', 'Queue')}")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Members", len(members))
+        c2.metric("Skill Eval", info.get('skillEvaluationMethod', 'N/A'))
+
+        acw = info.get('acwSettings', {})
+        acw_timeout = acw.get('timeoutMs')
+        c3.metric("ACW", f"{acw_timeout // 1000}s" if acw_timeout else "N/A")
+
+        media = info.get('mediaSettings', {})
+        call_settings = media.get('call', {})
+        alert = call_settings.get('alertingTimeoutSeconds')
+        c4.metric("Alert Timeout", f"{alert}s" if alert else "N/A")
+
+        if info.get('description'):
+            st.caption(info['description'])
+
+    # -- pages --
+
+    def _page_view(self) -> None:
+        self._queue_header()
         members = self.get_state('members', [])
 
-        st.markdown(f"## {queue_info.get('name')}")
-        st.caption(f"{len(members)} members")
-
-        col1, col2 = st.columns([1, 5])
-        with col1:
-            if st.button("🔄 Refresh"):
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            if st.button("Refresh", key="qm_refresh"):
                 self._refresh_members()
                 st.rerun()
 
-        # Filter
-        search = st.text_input("Filter", placeholder="Search by name...")
+        search = st.text_input("Filter members", placeholder="Name or email...", key="qm_view_filter")
 
-        # Build dataframe
+        if not members:
+            st.info("This queue has no members.")
+            return
+
         df = pd.DataFrame([{
-            'Name': m.get('name', 'Unknown'),
-            'Email': m.get('email', 'N/A'),
-            'Joined': m.get('joined', 'N/A'),
-            'ID': m.get('id', '')
+            'Name': m.get('name', m.get('user', {}).get('name', '')),
+            'Email': m.get('email', m.get('user', {}).get('email', '')),
+            'Joined': str(m.get('joined', '')),
+            'ID': m.get('id', m.get('user', {}).get('id', '')),
         } for m in members])
 
         if search and not df.empty:
-            mask = df['Name'].str.contains(search, case=False, na=False) | \
-                   df['Email'].str.contains(search, case=False, na=False)
+            mask = (df['Name'].str.contains(search, case=False, na=False) |
+                    df['Email'].str.contains(search, case=False, na=False))
             df = df[mask]
 
-        st.caption(f"Showing {len(df)} members")
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+        st.caption(f"Showing {len(df)} of {len(members)} members")
+        st.dataframe(df, use_container_width=True, hide_index=True, height=min(400, 35 * len(df) + 38))
 
-    def _render_config_page(self) -> None:
-        """Render queue configuration page."""
-        queue_info = self.get_state('queue_info')
+    def _page_add(self) -> None:
+        self._queue_header()
+        st.markdown("### Add Members")
 
-        st.markdown(f"## Queue Configuration")
-        st.markdown(f"### {queue_info.get('name')}")
+        tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
+        emails_text = ""
+        with tab1:
+            emails_text = st.text_area(
+                "Emails (one per line)", height=180,
+                placeholder="agent1@company.com\nagent2@company.com", key="qm_paste"
+            )
+        with tab2:
+            uploaded = st.file_uploader("CSV or TXT file", type=['csv', 'txt'], key="qm_upload")
+            if uploaded:
+                content = uploaded.read().decode('utf-8')
+                emails_text = "\n".join(
+                    line.split(',')[0].strip().strip('"')
+                    for line in content.split('\n') if '@' in line
+                )
+                st.code(emails_text, language=None)
 
-        # Display queue details in a clean format
-        config_items = [
-            ("ID", queue_info.get('id', 'N/A')),
-            ("Name", queue_info.get('name', 'N/A')),
-            ("Description", queue_info.get('description', 'N/A')),
-            ("Media Settings", str(queue_info.get('mediaSettings', {}))),
-            ("ACW Settings", str(queue_info.get('acwSettings', {}))),
-            ("Skill Evaluation", queue_info.get('skillEvaluationMethod', 'N/A')),
-            ("Queue Flow", queue_info.get('queueFlow', {}).get('name', 'N/A') if queue_info.get('queueFlow') else 'N/A'),
-            ("Calling Party Name", queue_info.get('callingPartyName', 'N/A')),
-            ("Calling Party Number", queue_info.get('callingPartyNumber', 'N/A')),
-        ]
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="qm_dryrun")
+        run = c2.button("Process", type="primary", use_container_width=True, key="qm_run_add")
 
-        for label, value in config_items:
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                st.markdown(f"**{label}:**")
-            with col2:
-                st.markdown(str(value) if value else "—")
+        if run and emails_text:
+            self._execute_add(emails_text, dry_run)
 
-        # Raw JSON expander
-        with st.expander("📄 Raw JSON"):
-            st.json(queue_info)
+    def _execute_add(self, raw: str, dry_run: bool) -> None:
+        emails = list(dict.fromkeys(
+            e.strip() for e in raw.split('\n') if e.strip() and '@' in e
+        ))
+        if not emails:
+            st.error("No valid email addresses found.")
+            return
 
-    def _render_export_page(self) -> None:
-        """Render export page."""
-        queue_info = self.get_state('queue_info')
+        st.markdown("---")
+        progress = st.progress(0)
+        found, missing = [], []
+        for i, email in enumerate(emails):
+            progress.progress((i + 1) / len(emails))
+            user = self.api.users.search_by_email(email)
+            if user:
+                found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
+            else:
+                missing.append(email)
+        progress.empty()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success(f"**{len(found)}** users found")
+            if found:
+                st.dataframe(pd.DataFrame(found)[['name', 'email']], hide_index=True, use_container_width=True)
+        with c2:
+            if missing:
+                st.error(f"**{len(missing)}** not found")
+                for e in missing:
+                    st.caption(f"- {e}")
+
+        if not found:
+            return
+        if dry_run:
+            st.info(f"Dry run complete. {len(found)} users would be added. Uncheck 'Preview only' to execute.")
+            return
+
+        resp = self.api.queues.add_members(self.get_state('queue_id'), [u['id'] for u in found])
+        if resp.success:
+            st.success(f"Added {len(found)} members to queue.")
+            self._refresh_members()
+        else:
+            st.error(f"Failed: {resp.error}")
+
+    def _page_remove(self) -> None:
+        self._queue_header()
+        st.markdown("### Remove Members")
         members = self.get_state('members', [])
+        if not members:
+            st.info("No members to remove.")
+            return
 
-        st.markdown("## Export Queue Data")
-        st.caption(f"Queue: **{queue_info.get('name')}** · {len(members)} members")
+        search = st.text_input("Filter", placeholder="Search...", key="qm_rm_filter")
+        filtered = members
+        if search:
+            sl = search.lower()
+            filtered = [m for m in members if
+                        sl in m.get('name', m.get('user', {}).get('name', '')).lower() or
+                        sl in m.get('email', m.get('user', {}).get('email', '')).lower()]
+
+        def _label(m):
+            name = m.get('name', m.get('user', {}).get('name', '?'))
+            email = m.get('email', m.get('user', {}).get('email', '?'))
+            return f"{name} ({email})"
+
+        def _id(m):
+            return m.get('id', m.get('user', {}).get('id', ''))
+
+        options = {_label(m): _id(m) for m in filtered}
+        selected = st.multiselect("Select members to remove", list(options.keys()), key="qm_rm_sel")
+
+        if selected:
+            st.warning(f"{len(selected)} agent(s) will be removed from queue.")
+            confirm = st.checkbox("I confirm this removal", key="qm_rm_confirm")
+            if st.button("Remove Selected", type="primary", disabled=not confirm, key="qm_rm_btn"):
+                ids = [options[s] for s in selected]
+                resp = self.api.queues.remove_members(self.get_state('queue_id'), ids)
+                if resp.success:
+                    st.success(f"Removed {len(selected)} members from queue.")
+                    self._refresh_members()
+                    st.rerun()
+                else:
+                    st.error(f"Failed: {resp.error}")
+
+    def _page_config(self) -> None:
+        info = self.get_state('queue_info')
+        st.markdown(f"## Queue Configuration")
+        st.markdown(f"### {info.get('name', 'Queue')}")
+
+        # General
+        st.markdown("#### General")
+        rows = [
+            ("ID", info.get('id', '')),
+            ("Name", info.get('name', '')),
+            ("Description", info.get('description', '')),
+            ("Skill Evaluation", info.get('skillEvaluationMethod', '')),
+            ("Calling Party Name", info.get('callingPartyName', '')),
+            ("Calling Party Number", info.get('callingPartyNumber', '')),
+        ]
+        for label, value in rows:
+            c1, c2 = st.columns([1, 3])
+            c1.markdown(f"**{label}**")
+            c2.markdown(value or "\u2014")
+
+        # ACW Settings
+        acw = info.get('acwSettings', {})
+        if acw:
+            st.markdown("#### After Call Work")
+            c1, c2 = st.columns([1, 3])
+            c1.markdown("**Wrapup Prompt**")
+            c2.markdown(acw.get('wrapupPrompt', '\u2014'))
+            c1, c2 = st.columns([1, 3])
+            c1.markdown("**Timeout**")
+            timeout = acw.get('timeoutMs')
+            c2.markdown(f"{timeout // 1000} seconds" if timeout else "\u2014")
+
+        # Media Settings
+        media = info.get('mediaSettings', {})
+        if media:
+            st.markdown("#### Media Settings")
+            for media_type, settings in media.items():
+                if isinstance(settings, dict):
+                    alert = settings.get('alertingTimeoutSeconds')
+                    if alert:
+                        c1, c2 = st.columns([1, 3])
+                        c1.markdown(f"**{media_type.title()} Alert**")
+                        c2.markdown(f"{alert} seconds")
+
+        # Queue Flow
+        qf = info.get('queueFlow')
+        if qf:
+            st.markdown("#### Queue Flow")
+            c1, c2 = st.columns([1, 3])
+            c1.markdown("**Flow**")
+            c2.markdown(qf.get('name', qf.get('id', '\u2014')))
+
+        # Raw JSON
+        with st.expander("Raw JSON"):
+            st.json(info)
+
+    def _page_export(self) -> None:
+        self._queue_header()
+        st.markdown("### Export")
+        members = self.get_state('members', [])
+        info = self.get_state('queue_info')
+        name = info.get('name', 'queue')
 
         df = pd.DataFrame([{
-            'Name': m.get('name', 'Unknown'),
-            'Email': m.get('email', 'N/A'),
-            'ID': m.get('id', '')
+            'Name': m.get('name', m.get('user', {}).get('name', '')),
+            'Email': m.get('email', m.get('user', {}).get('email', '')),
+            'ID': m.get('id', m.get('user', {}).get('id', '')),
         } for m in members])
 
-        st.markdown("### Download Options")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.download_button(
-                "📥 Members CSV",
-                data=df.to_csv(index=False),
-                file_name=f"{queue_info.get('name', 'queue')}_members.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="qm_export_csv"
-            )
-
-        with col2:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download CSV", data=df.to_csv(index=False),
+                               file_name=f"{name}_members.csv", mime="text/csv",
+                               use_container_width=True, key="qm_dl_csv")
+        with c2:
             emails = "\n".join(df['Email'].dropna().tolist())
-            st.download_button(
-                "📥 Emails Only",
-                data=emails,
-                file_name=f"{queue_info.get('name', 'queue')}_emails.txt",
-                mime="text/plain",
-                use_container_width=True,
-                key="qm_export_emails"
-            )
+            st.download_button("Download Emails", data=emails,
+                               file_name=f"{name}_emails.txt", mime="text/plain",
+                               use_container_width=True, key="qm_dl_email")
 
         st.markdown("### Preview")
-        st.dataframe(df.head(20), use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-    def _render_all_queues_page(self) -> None:
-        """Render all queues overview page."""
-        st.markdown("## All Queues")
-
-        if st.button("🔄 Load All Queues", use_container_width=False):
+    def _page_all_queues(self) -> None:
+        st.markdown("### All Queues")
+        if st.button("Load All Queues", key="qm_load_all"):
             with st.spinner("Loading queues..."):
-                queues = list(self.api.queues.list(page_size=100, max_pages=5))
+                queues = list(self.api.queues.list(page_size=100))
                 self.set_state('all_queues', queues)
                 st.rerun()
 
         all_queues = self.get_state('all_queues', [])
-
         if not all_queues:
-            st.info("Click 'Load All Queues' to fetch queue data")
+            st.caption("Click 'Load All Queues' to browse queues in your org.")
             return
 
-        st.caption(f"{len(all_queues)} queues loaded")
-
-        # Filter
-        search = st.text_input("Filter queues", placeholder="Search by name...")
-
-        # Build dataframe
+        search = st.text_input("Filter", placeholder="Search queues...", key="qm_all_filter")
         df = pd.DataFrame([{
-            'Name': q.get('name', 'Unknown'),
-            'Member Count': q.get('memberCount', 0),
-            'ID': q.get('id', '')
+            'Name': q.get('name', ''),
+            'Members': q.get('memberCount', 0),
+            'Skill Eval': q.get('skillEvaluationMethod', ''),
+            'ID': q.get('id', ''),
         } for q in all_queues])
 
         if search and not df.empty:
-            mask = df['Name'].str.contains(search, case=False, na=False)
-            df = df[mask]
+            df = df[df['Name'].str.contains(search, case=False, na=False)]
 
+        st.caption(f"{len(df)} queues")
         st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
-        # Export option
-        st.download_button(
-            "📥 Export All Queues (CSV)",
-            data=df.to_csv(index=False),
-            file_name="all_queues.csv",
-            mime="text/csv",
-            key="qm_export_all"
-        )
+        st.download_button("Export All Queues CSV", data=df.to_csv(index=False),
+                           file_name="all_queues.csv", mime="text/csv", key="qm_exp_all")

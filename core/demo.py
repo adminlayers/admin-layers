@@ -210,6 +210,24 @@ class DemoUsersAPI:
                 return u
         return None
 
+    def get_queues(self, user_id: str) -> List[Dict]:
+        result = []
+        for qid, members in DEMO_QUEUE_MEMBERS.items():
+            if any(m["id"] == user_id for m in members):
+                for q in DEMO_QUEUES:
+                    if q["id"] == qid:
+                        result.append(q)
+        return result
+
+    def get_groups(self, user_id: str) -> MockAPIResponse:
+        result = []
+        for gid, members in DEMO_GROUP_MEMBERS.items():
+            if any(m["id"] == user_id for m in members):
+                for g in DEMO_GROUPS:
+                    if g["id"] == gid:
+                        result.append(g)
+        return MockAPIResponse(success=True, data={"entities": result}, status_code=200)
+
     def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
         for u in DEMO_USERS:
             yield u
@@ -261,6 +279,12 @@ class DemoQueuesAPI:
 
     def get_members(self, queue_id: str) -> List[Dict]:
         return DEMO_QUEUE_MEMBERS.get(queue_id, [])
+
+    def add_members(self, queue_id: str, member_ids: List[str]) -> MockAPIResponse:
+        return MockAPIResponse(success=True, data={"added": len(member_ids)}, status_code=200)
+
+    def remove_members(self, queue_id: str, member_ids: List[str]) -> MockAPIResponse:
+        return MockAPIResponse(success=True, data=None, status_code=200)
 
     def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
         for q in DEMO_QUEUES:
