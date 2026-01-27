@@ -3,8 +3,8 @@ Demo Mode Module
 Provides mock data and API simulation for running Admin Layers
 without real Genesys Cloud credentials.
 
-Enables hosted demo deployments on Streamlit Community Cloud
-where visitors can explore the UI without connecting to a real org.
+Enables hosted demo deployments where visitors can explore the UI
+without connecting to a real org.
 """
 
 import random
@@ -12,8 +12,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, Generator, List, Optional
-
-import streamlit as st
 
 
 # =============================================================================
@@ -159,17 +157,21 @@ DEMO_DATA = {
 
 
 # =============================================================================
-# Demo Mode State
+# Demo Mode State (framework-agnostic)
 # =============================================================================
+
+_demo_mode: bool = False
+
 
 def is_demo_mode() -> bool:
     """Check if demo mode is active."""
-    return st.session_state.get("demo_mode", False)
+    return _demo_mode
 
 
 def set_demo_mode(enabled: bool) -> None:
     """Enable or disable demo mode."""
-    st.session_state.demo_mode = enabled
+    global _demo_mode
+    _demo_mode = enabled
 
 
 # =============================================================================
