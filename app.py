@@ -50,7 +50,7 @@ st.markdown("""
 <style>
     :root {
         --mobile-padding: 0.75rem;
-        --sidebar-width: 17rem;
+        --sidebar-width: 16rem;
     }
 
     #MainMenu {visibility: hidden;}
@@ -145,27 +145,43 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] button {
-        padding: 0.4rem 0.5rem;
-        font-size: 0.85rem;
+        padding: 0.35rem 0.45rem;
+        font-size: 0.82rem;
+        border-radius: 6px;
+        line-height: 1.1;
     }
 
     [data-testid="stSidebar"] .stButton + .stButton {
-        margin-top: 0.25rem;
+        margin-top: 0.2rem;
     }
 
     [data-testid="stSidebar"] .nav-header {
-        margin: 0.75rem 0 0.35rem 0;
+        margin: 0.6rem 0 0.25rem 0;
     }
 
     [data-testid="collapsedControl"] {
         font-size: 0 !important;
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.7);
+    }
+
+    [data-testid="collapsedControl"] div,
+    [data-testid="collapsedControl"] svg {
+        display: none !important;
     }
 
     [data-testid="collapsedControl"]::before {
         content: "☰";
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         color: #e2e8f0;
     }
+
+    [data-testid="stSidebar"] hr {
+        margin: 0.4rem 0;
+    }
+
 
     @media (max-width: 768px) {
         .block-container {
@@ -174,8 +190,19 @@ st.markdown("""
         }
 
         [data-testid="stSidebar"] {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
             min-width: 100%;
             max-width: 100%;
+            z-index: 1000;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease;
+        }
+
+        section[data-testid="stSidebar"][aria-expanded="true"] {
+            transform: translateX(0);
         }
 
         [data-testid="stSidebar"] .block-container {
@@ -184,8 +211,8 @@ st.markdown("""
         }
 
         [data-testid="stSidebar"] button {
-            padding: 0.35rem 0.5rem;
-            font-size: 0.8rem;
+            padding: 0.3rem 0.45rem;
+            font-size: 0.78rem;
         }
     }
 </style>
