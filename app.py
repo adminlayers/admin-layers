@@ -56,17 +56,28 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Fix Material Design icon ligature text showing when font fails to load */
+    /* Hamburger menu button — hide default icon text, show clean toggle */
     [data-testid="collapsedControl"] {
         overflow: hidden !important;
+        width: 2.2rem;
+        height: 2.2rem;
         max-width: 2.5rem;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.7);
+        font-size: 0 !important;
+        line-height: 2.2rem;
+        text-align: center;
     }
-    [data-testid="collapsedControl"] span {
+    [data-testid="collapsedControl"] span,
+    [data-testid="collapsedControl"] div,
+    [data-testid="collapsedControl"] svg {
+        display: none !important;
         font-size: 0 !important;
     }
     [data-testid="collapsedControl"]::after {
-        content: "\\00BB";
-        font-size: 1.5rem;
+        content: "\\2630";
+        font-size: 1.1rem;
+        color: #e2e8f0;
     }
 
     /* Fix expander arrow icon text */
@@ -185,25 +196,6 @@ st.markdown("""
         margin: 0.6rem 0 0.25rem 0;
     }
 
-    [data-testid="collapsedControl"] {
-        font-size: 0 !important;
-        width: 2.2rem;
-        height: 2.2rem;
-        border-radius: 0.5rem;
-        background: rgba(15, 23, 42, 0.7);
-    }
-
-    [data-testid="collapsedControl"] div,
-    [data-testid="collapsedControl"] svg {
-        display: none !important;
-    }
-
-    [data-testid="collapsedControl"]::before {
-        content: "☰";
-        font-size: 1.05rem;
-        color: #e2e8f0;
-    }
-
     [data-testid="stSidebar"] hr {
         margin: 0.4rem 0;
     }
@@ -215,20 +207,29 @@ st.markdown("""
             padding-right: var(--mobile-padding);
         }
 
+        /* Sidebar: full-screen overlay on mobile */
         [data-testid="stSidebar"] {
-            position: fixed;
+            position: fixed !important;
             top: 0;
             left: 0;
-            height: 100%;
-            min-width: 100%;
-            max-width: 100%;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            height: 100vh !important;
             z-index: 1000;
+            background-color: #1a2632;
             transform: translateX(-100%);
             transition: transform 0.2s ease;
         }
 
         section[data-testid="stSidebar"][aria-expanded="true"] {
             transform: translateX(0);
+        }
+
+        /* Keep main content below sidebar layer */
+        [data-testid="stAppViewContainer"] {
+            position: relative;
+            z-index: 1;
         }
 
         [data-testid="stSidebar"] .block-container {
