@@ -27,7 +27,8 @@ class GroupManagerUtility(BaseUtility):
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('group_id', ''),
                              ('group_info', None), ('members', []),
-                             ('all_groups', None)]:
+                             ('all_groups', None),
+                             ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
@@ -38,12 +39,15 @@ class GroupManagerUtility(BaseUtility):
             st.caption(f"Selected: **{group_info.get('name', '')}**")
         pages = [
             ("gm_nav_list", "\U0001F4CB All Groups", "list"),
+            ("gm_nav_create", "\U00002795 Create Group", "create"),
         ]
         if group_info:
             pages += [
                 ("gm_nav_detail", "\U0001F465 Members", "detail"),
                 ("gm_nav_add", "\U00002795 Add Members", "add"),
                 ("gm_nav_remove", "\U00002796 Remove Members", "remove"),
+                ("gm_nav_edit", "\U0000270F\ufe0f Edit Group", "edit"),
+                ("gm_nav_delete", "\U0001F5D1\ufe0f Delete Group", "delete"),
                 ("gm_nav_export", "\U0001F4E5 Export", "export"),
             ]
         for key, label, page in pages:
@@ -56,7 +60,8 @@ class GroupManagerUtility(BaseUtility):
         page = self.get_state('page', 'list')
         {'list': self._page_list, 'detail': self._page_detail,
          'add': self._page_add, 'remove': self._page_remove,
-         'export': self._page_export}.get(page, self._page_list)()
+         'export': self._page_export, 'create': self._page_create,
+         'edit': self._page_edit, 'delete': self._page_delete}.get(page, self._page_list)()
 
     # -- helpers --
 
@@ -81,7 +86,7 @@ class GroupManagerUtility(BaseUtility):
         info = self.get_state('group_info')
         if not info:
             return
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 5])
+        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 4])
         if c1.button("\U00002795", help="Add members", key="gm_ab_add"):
             self.set_state('page', 'add')
             st.rerun()
@@ -91,7 +96,10 @@ class GroupManagerUtility(BaseUtility):
         if c3.button("\U0001F4E5", help="Export", key="gm_ab_exp"):
             self.set_state('page', 'export')
             st.rerun()
-        if c4.button("\U0001F504", help="Refresh", key="gm_ab_ref"):
+        if c4.button("\U0000270F\ufe0f", help="Edit", key="gm_ab_edit"):
+            self.set_state('page', 'edit')
+            st.rerun()
+        if c5.button("\U0001F504", help="Refresh", key="gm_ab_ref"):
             self._refresh_members()
             st.rerun()
 
@@ -116,12 +124,36 @@ class GroupManagerUtility(BaseUtility):
 
     def _page_list(self) -> None:
         st.markdown("## Groups")
-        all_groups = self.get_state('all_groups')
+        page_size = self.get_state('list_page_size', 25)
+        page_number = self.get_state('list_page_number', 1)
 
-        if all_groups is None:
-            with st.spinner("Loading groups..."):
-                all_groups = list(self.api.groups.list(page_size=100))
-                self.set_state('all_groups', all_groups)
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            page_size = st.selectbox(
+                "Rows per page",
+                [25, 50, 100],
+                index=[25, 50, 100].index(page_size),
+                key="gm_page_size",
+            )
+            self.set_state('list_page_size', page_size)
+        with c2:
+            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="gm_page_num"))
+            self.set_state('list_page_number', page_number)
+
+        with st.spinner("Loading groups..."):
+            resp = self.api.groups.list_page(page_size=page_size, page_number=page_number)
+        if not resp.success:
+            st.error(f"Failed to load groups: {resp.error}")
+            return
+
+        data = resp.data or {}
+        all_groups = data.get('entities', [])
+        total = data.get('total', len(all_groups))
+        page_count = data.get('pageCount', 1)
+
+        if page_number > page_count:
+            self.set_state('list_page_number', page_count)
+            st.rerun()
 
         if not all_groups:
             st.info("No groups found in your org.")
@@ -141,7 +173,7 @@ class GroupManagerUtility(BaseUtility):
         if search and not df.empty:
             df = df[df['Name'].str.contains(search, case=False, na=False)]
 
-        st.caption(f"{len(df)} groups")
+        st.caption(f"Showing {len(df)} of {total} groups (Page {page_number} of {page_count})")
         st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
         st.markdown("---")
@@ -158,6 +190,85 @@ class GroupManagerUtility(BaseUtility):
                 with st.spinner("Loading..."):
                     self._load_group(options[chosen])
                     st.rerun()
+
+    def _page_create(self) -> None:
+        st.markdown("## Create Group")
+        st.warning("Creating a group affects your org immediately. Confirm before creating.")
+
+        with st.form("gm_create_form"):
+            name = st.text_input("Name", placeholder="Group name")
+            description = st.text_area("Description", placeholder="Group description")
+            group_type = st.selectbox("Type", ["official", "custom"], index=0)
+            visibility = st.selectbox("Visibility", ["public", "members"], index=0)
+            confirm = st.checkbox("I confirm I want to create this group")
+            submitted = st.form_submit_button("Create Group", use_container_width=True)
+
+        if submitted:
+            if not confirm:
+                st.error("Confirmation required before creating a group.")
+                return
+            if not name:
+                st.error("Group name is required.")
+                return
+            resp = self.api.groups.create(name=name, description=description, group_type=group_type, visibility=visibility)
+            if resp.success:
+                st.success("Group created.")
+                self.set_state('group_id', resp.data.get('id'))
+                self.set_state('group_info', resp.data)
+                self.set_state('page', 'detail')
+                st.rerun()
+            else:
+                st.error(f"Failed to create group: {resp.error}")
+
+    def _page_edit(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+        st.markdown("### Edit Group")
+
+        with st.form("gm_edit_form"):
+            name = st.text_input("Name", value=info.get('name', ''))
+            description = st.text_area("Description", value=info.get('description', ''))
+            visibility = st.selectbox(
+                "Visibility",
+                ["public", "members"],
+                index=0 if info.get("visibility", "public") == "public" else 1,
+            )
+            submitted = st.form_submit_button("Save Changes", use_container_width=True)
+
+        if submitted:
+            payload = {"name": name, "description": description, "visibility": visibility}
+            resp = self.api.groups.update(info.get('id'), payload)
+            if resp.success:
+                st.success("Group updated.")
+                self._load_group(info.get('id'))
+                st.rerun()
+            else:
+                st.error(f"Failed to update group: {resp.error}")
+
+    def _page_delete(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._group_header()
+        st.markdown("### Delete Group")
+        st.warning("Deleting a group is permanent. This action requires confirmation.")
+        confirm = st.checkbox("I understand this will delete the group", key="gm_delete_confirm")
+        if st.button("Delete Group", type="primary", disabled=not confirm, key="gm_delete_btn"):
+            resp = self.api.groups.delete(info.get('id'))
+            if resp.success:
+                st.success("Group deleted.")
+                self.set_state('group_info', None)
+                self.set_state('group_id', '')
+                self.set_state('page', 'list')
+                st.rerun()
+            else:
+                st.error(f"Failed to delete group: {resp.error}")
 
     def _page_detail(self) -> None:
         info = self.get_state('group_info')

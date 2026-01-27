@@ -48,6 +48,11 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    :root {
+        --mobile-padding: 0.75rem;
+        --sidebar-width: 17rem;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
@@ -118,6 +123,71 @@ st.markdown("""
         color: #8899aa;
         padding: 4px 0;
     }
+
+    /* Mobile-first layout refinements */
+    .block-container {
+        padding-top: 1rem;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+        padding-bottom: 2rem;
+    }
+
+    [data-testid="stSidebar"] {
+        min-width: var(--sidebar-width);
+        max-width: var(--sidebar-width);
+        overflow: hidden;
+    }
+
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0.75rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    [data-testid="stSidebar"] button {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    [data-testid="stSidebar"] .stButton + .stButton {
+        margin-top: 0.25rem;
+    }
+
+    [data-testid="stSidebar"] .nav-header {
+        margin: 0.75rem 0 0.35rem 0;
+    }
+
+    [data-testid="collapsedControl"] {
+        font-size: 0 !important;
+    }
+
+    [data-testid="collapsedControl"]::before {
+        content: "☰";
+        font-size: 1.1rem;
+        color: #e2e8f0;
+    }
+
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: var(--mobile-padding);
+            padding-right: var(--mobile-padding);
+        }
+
+        [data-testid="stSidebar"] {
+            min-width: 100%;
+            max-width: 100%;
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding-left: var(--mobile-padding);
+            padding-right: var(--mobile-padding);
+        }
+
+        [data-testid="stSidebar"] button {
+            padding: 0.35rem 0.5rem;
+            font-size: 0.8rem;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,10 +204,15 @@ def init_session_state():
         'current_utility': None,
         'page': 'home',
         'demo_mode': False,
+        'local_user': None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+
+    if st.session_state.local_user is None:
+        storage = get_storage()
+        st.session_state.local_user = storage.retrieve_local_user()
 
 
 def try_auto_auth():
@@ -197,6 +272,9 @@ def render_sidebar():
     """Render main sidebar."""
     with st.sidebar:
         st.markdown(f"### ⚙️ {APP_NAME}")
+        if st.session_state.local_user:
+            name = st.session_state.local_user.get("name", "Local User")
+            st.caption(f"Signed in as **{name}**")
 
         # Connection status
         if is_demo_mode():
@@ -403,8 +481,47 @@ def page_connect():
         # Check encrypted storage for saved credentials
         storage = get_storage()
         saved_creds = storage.retrieve_credentials()
+        saved_profile = storage.retrieve_local_user()
+
+        with st.expander("Local User Profile (stored locally)", expanded=False):
+            st.markdown(
+                "Set a local profile for SaaS-style usage. "
+                "This stays on the machine/browser in encrypted storage."
+            )
+            with st.form("local_user_form"):
+                name = st.text_input(
+                    "Display name",
+                    value=(saved_profile or {}).get("name", ""),
+                    placeholder="Jane Admin"
+                )
+                email = st.text_input(
+                    "Work email",
+                    value=(saved_profile or {}).get("email", ""),
+                    placeholder="jane@company.com"
+                )
+                company = st.text_input(
+                    "Company",
+                    value=(saved_profile or {}).get("company", ""),
+                    placeholder="Company name"
+                )
+                save_profile = st.form_submit_button("Save Local Profile", use_container_width=True)
+                if save_profile:
+                    if name and email:
+                        storage.store_local_user({"name": name, "email": email, "company": company})
+                        st.session_state.local_user = storage.retrieve_local_user()
+                        st.success("Local profile saved.")
+                    else:
+                        st.error("Name and email are required.")
+
+            if saved_profile:
+                if st.button("🗑️ Clear Local Profile", key="clear_local_profile"):
+                    storage.clear_local_user()
+                    st.session_state.local_user = None
+                    st.success("Local profile cleared.")
+                    st.rerun()
 
         with st.form("connect_form"):
+            st.markdown("### OAuth Client Credentials")
             client_id = st.text_input(
                 "Client ID",
                 value=(saved_creds or {}).get("client_id", "") or (config.client_id if config else ''),
@@ -555,6 +672,11 @@ def page_storage_info():
 - History retained for audit and rollback purposes
 - Maximum 500 records maintained
 
+**Local User Profile:**
+- Optional profile stored locally for SaaS-style deployments
+- Encrypted at rest alongside credentials
+- Used to label actions and sessions
+
 **Hosted Deployment (Streamlit Community Cloud):**
 - Set `encryption_key` in Streamlit Secrets for persistent encrypted storage
 - Credentials entered through the UI are encrypted in session state
@@ -578,6 +700,22 @@ def page_storage_info():
             st.rerun()
     else:
         st.info("No saved credentials")
+
+    st.markdown("### Local User Profile")
+    profile = storage.retrieve_local_user()
+    if profile:
+        st.success("Local profile saved")
+        st.caption(f"Name: {profile.get('name', 'Unknown')}")
+        st.caption(f"Email: {profile.get('email', 'Unknown')}")
+        if profile.get("company"):
+            st.caption(f"Company: {profile.get('company')}")
+        if st.button("🗑️ Clear Local Profile", key="storage_clear_profile"):
+            storage.clear_local_user()
+            st.session_state.local_user = None
+            st.success("Local profile cleared")
+            st.rerun()
+    else:
+        st.info("No local profile saved")
 
 
 # =============================================================================
