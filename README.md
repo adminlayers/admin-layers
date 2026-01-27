@@ -1,407 +1,281 @@
-<div align="center">
+# Admin Layers - Anvil App
 
-# Admin Layers
+Complete Python web application for Genesys Cloud administration built with Anvil.
 
-<a href="docs/images/adminlayer-infographic.png">
-  <img src="docs/images/adminlayer-infographic.png" alt="Admin Layers Overview" width="700"/>
-</a>
+## 🎯 Features
 
-**Bulk admin tools for Genesys Cloud with encrypted storage and demo mode**
+### User Manager
+- **List Users**: View all users with pagination
+- **Bulk Edit Profiles**: Upload CSV to update multiple user profiles at once
+  - Update name, department, title, and state
+  - Preview changes before applying (dry run mode)
+  - Detailed success/error reporting
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-FF4B4B.svg)](https://streamlit.io)
-[![GitHub Stars](https://img.shields.io/github/stars/adminlayers/admin-layers?style=social)](https://github.com/adminlayers/admin-layers)
+### Group Manager
+- **List Groups**: View all groups with member counts
+- **Manage Membership**: Add/remove users from groups (coming soon)
 
-[Website](https://adminlayers.com) | [Documentation](https://github.com/adminlayers/docs) | [Report Issues](https://github.com/adminlayers/admin-layers/issues)
+### Queue Manager
+- **List Queues**: View all routing queues
+- **Manage Members**: Add/remove queue members (coming soon)
 
-</div>
+### Skill Manager
+- **List Skills**: View all routing skills
+- **Assign Skills**: Bulk skill assignment (coming soon)
 
----
+### Demo Mode
+- Test all features without connecting to Genesys Cloud
+- Sample data included for all utilities
+- Perfect for training and demonstrations
 
-## The Problem
+## 🚀 Deployment to Anvil
 
-Managing Genesys Cloud through the web UI is:
+### Option 1: Create New Anvil App (Recommended)
 
-- **Slow** - Adding 500 users to a group takes hours of clicking
-- **Risky** - No preview, no undo, no safety net
-- **Tedious** - Repetitive tasks that should be automated
+1. **Sign up for Anvil** (if you haven't already)
+   - Go to https://anvil.works
+   - Click "Sign Up" and create a free account
 
-## The Solution
+2. **Create a New App**
+   - Click "Create New App"
+   - Choose "Start with Blank App"
+   - Name it "Admin Layers"
 
-Admin Layers is a Streamlit-based utility suite that connects directly to Genesys Cloud APIs. Run it locally or deploy to Streamlit Community Cloud. All credentials are encrypted at rest.
+3. **Upload Server Code**
+   - In the left sidebar, click "Server Code" dropdown
+   - Click the "+" button to add a new module
+   - Name it "genesys_api"
+   - Copy the contents of `server_code/genesys_api.py` into this module
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│  Admin Layers                              ◉ Demo Mode        │
-├──────────┬─────────────────────────────────────────────────────┤
-│          │                                                     │
-│ ⚙ Admin  │  Welcome to Admin Layers                           │
-│  Layers  │                                                     │
-│          │  ┌─────────────────┐  ┌─────────────────┐          │
-│ ──────── │  │ 🔑 Connect to   │  │ ⚡ Try Demo      │          │
-│          │  │    Your Org     │  │    Mode          │          │
-│ 🏠 Home  │  │                 │  │                  │          │
-│          │  │ Use your OAuth  │  │ Explore with     │          │
-│ ──────── │  │ credentials     │  │ sample data      │          │
-│          │  └─────────────────┘  └─────────────────┘          │
-│ 👥 Group │                                                     │
-│  Manager │  Available Utilities                                │
-│          │  ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│ 🎯 Skill │  │👥 Group  │ │🎯 Skill  │ │📞 Queue  │           │
-│  Manager │  │  Manager │ │  Manager │ │  Manager │           │
-│          │  │  [Open]  │ │  [Open]  │ │  [Open]  │           │
-│ 📞 Queue │  └──────────┘ └──────────┘ └──────────┘           │
-│  Manager │                                                     │
-│          │                                                     │
-│ ──────── │                                                     │
-│ 🔒 Stor- │                                                     │
-│   age    │                                                     │
-│ v1.1.0   │                                                     │
-└──────────┴─────────────────────────────────────────────────────┘
-```
+   - Click "+" again to add another module
+   - Name it "demo_mode"
+   - Copy the contents of `server_code/demo_mode.py` into this module
 
----
+4. **Create Client Forms**
+   - Click "Forms" in the left sidebar
+   - Delete the default Form1
 
-## Key Features
+   - Click "+" to add a new form
+   - Name it "MainForm"
+   - Switch to Code view (click "Code" at the top)
+   - Copy the contents of `client_code/forms/MainForm.py`
+   - Paste it into the code editor
 
-| Feature | Description |
-|---------|-------------|
-| **Bulk Operations** | Add hundreds of users to groups, assign skills, manage queues in seconds |
-| **Encrypted Storage** | All credentials encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256) |
-| **Demo Mode** | Try the full interface with sample data — no credentials required |
-| **Dry Run Mode** | Preview changes before executing. See the blast radius. |
-| **Cloud Deployable** | Host on Streamlit Community Cloud with encrypted secrets |
-| **Modular Design** | Use what you need. Extend with your own utilities. |
-| **Import/Export** | CSV import, bulk export, seamless data movement |
-| **Audit Trail** | Every operation logged locally with rollback data |
+   - Repeat for each form:
+     - LoginForm
+     - UserManagerForm
+     - GroupManagerForm
+     - QueueManagerForm
+     - SkillManagerForm
 
----
+5. **Set MainForm as Startup Form**
+   - Click the gear icon (⚙️) in the top right
+   - Select "App Settings"
+   - Under "Startup Form", select "MainForm"
+   - Click "Save"
 
-## Quick Start
+6. **Test the App**
+   - Click the "Run" button (▶️) at the top
+   - You should see the login screen
+   - Click "Demo Mode" to test with sample data
 
-### Option 1: Try Demo Mode (No Credentials)
+### Option 2: Clone from Anvil
 
-```bash
-git clone https://github.com/adminlayers/admin-layers.git
-cd admin-layers
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-Click **"Launch Demo"** on the home page to explore with sample data.
-
-### Option 2: Connect to Your Org
+If you have an Anvil app already set up, you can clone it:
 
 ```bash
-# Set your credentials
-export GENESYS_CLIENT_ID="your-client-id"
-export GENESYS_CLIENT_SECRET="your-client-secret"
-export GENESYS_REGION="mypurecloud.com"
+# Install anvil-app-server
+pip install anvil-app-server
 
-# Start the application
-streamlit run app.py
+# Clone the app
+anvil-app-server --app YOUR_APP_ID --app-origin https://anvil.works
 ```
 
-### Option 3: Deploy to Streamlit Community Cloud
+## 📋 CSV Format for Bulk Edit
 
-1. Fork this repository
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Deploy `app.py` from your fork
-4. Add secrets in the app settings:
+The bulk edit feature requires a CSV file with specific columns:
 
-```toml
-# In Streamlit Cloud > App Settings > Secrets
-encryption_key = "your-strong-encryption-key"
+### Required Column
+- `email` - User's email address (used to identify the user)
 
-[genesys]
-client_id = "your-client-id"
-client_secret = "your-client-secret"
-region = "mypurecloud.com"
+### Optional Columns (at least one required)
+- `name` - Full name
+- `department` - Department name
+- `title` - Job title
+- `state` - User state (`active` or `inactive`)
+
+### Example CSV Files
+
+**Simple (title and department only):**
+```csv
+email,title,department
+alice.johnson@company.com,Senior Agent,Support
+bob.martinez@company.com,Team Lead,Support
+carol.williams@company.com,Account Executive,Sales
 ```
 
-The app opens at `http://localhost:8501` (local) or your Streamlit Cloud URL.
-
----
-
-## Available Modules
-
-| Module | Description | Status |
-|--------|-------------|--------|
-| **Group Manager** | View members, bulk add/remove by email or CSV, export | ✅ Available |
-| **Skill Manager** | List skills, user lookup, bulk assign/remove with proficiency | ✅ Available |
-| **Queue Manager** | View members, queue config, export, all-queues overview | ✅ Available |
-
----
-
-## Demo Mode
-
-Admin Layers includes a built-in demo mode with realistic sample data:
-
-- **30 users** across Support, Sales, Engineering, QA, and HR departments
-- **5 groups** (Tier 1 Support, Tier 2 Support, Sales Team, All Hands, Weekend Coverage)
-- **5 queues** (General Support, Billing, Sales Inbound, Technical, VIP)
-- **12 routing skills** with user assignments and proficiency levels
-
-All operations (add, remove, assign) succeed in demo mode without side effects. This makes it possible to explore the full UI on a hosted deployment without real credentials.
-
-```
-┌──────────────────────────────────────────────────────────┐
-│ ⚡ Demo Mode — Exploring with sample data. No real       │
-│   Genesys Cloud connection. Connect with real            │
-│   credentials to manage your org.                        │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  Group Manager                                           │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │ Tier 1 Support · 15 members                        │  │
-│  │                                                    │  │
-│  │  Name              Email                    ID     │  │
-│  │  ─────────────     ───────────────────     ─────  │  │
-│  │  Alice Johnson     alice.johnson@...       0000   │  │
-│  │  Bob Martinez      bob.martinez@...        0001   │  │
-│  │  David Chen        david.chen@...          0003   │  │
-│  │  ...               ...                     ...    │  │
-│  │                                                    │  │
-│  │  Showing 15 members                                │  │
-│  └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
+**Complete (all fields):**
+```csv
+email,name,department,title,state
+alice@company.com,Alice Johnson,Support,Senior Agent,active
+bob@company.com,Bob Martinez,Support,Team Lead,active
+carol@company.com,Carol Williams,Sales,Account Executive,active
 ```
 
----
+### CSV Guidelines
+- First row must be the header with column names
+- Only include columns you want to update
+- Empty cells will be skipped (won't update that field)
+- Users not found by email will be reported but won't stop processing
+- Use "Preview only" checkbox to test before applying changes
 
-## Encrypted Storage
+## 🔧 Configuration
 
-All sensitive data is encrypted at rest using **Fernet symmetric encryption** (AES-128-CBC with HMAC-SHA256).
+### Genesys Cloud OAuth Credentials
 
-### How It Works
+To connect to your Genesys Cloud organization:
 
-| Component | Storage | Encryption |
-|-----------|---------|------------|
-| **Credentials** | Encrypted file or session state | Fernet (AES-128-CBC) |
-| **Session Data** | Streamlit session state | Isolated per tab |
-| **Action History** | Local JSON or session state | Plaintext (non-sensitive) |
+1. **Create OAuth Client**
+   - Log in to Genesys Cloud
+   - Go to Admin → Integrations → OAuth
+   - Click "Add Client"
+   - Select "Client Credentials" grant type
+   - Select appropriate roles (User, Group, Queue, Routing permissions)
+   - Save and copy the Client ID and Client Secret
 
-### Encryption Key Priority
-
-1. `st.secrets["encryption_key"]` — for Streamlit Community Cloud
-2. `ADMIN_LAYERS_KEY` environment variable — for server deployments
-3. Auto-generated per session — for local development
-
-When a persistent key is configured, credentials survive across browser sessions. Otherwise, they are encrypted in memory for the current session only.
-
----
-
-## Architecture
-
-<div align="center">
-<a href="docs/images/adminlayer-secure-diagram.png">
-  <img src="docs/images/adminlayer-secure-diagram.png" alt="Security Architecture" width="500"/>
-</a>
-</div>
-
-```
-┌─────────────────────────┐          ┌──────────────────────┐
-│   YOUR MACHINE / CLOUD  │          │   GENESYS CLOUD      │
-│                         │          │                      │
-│  ┌───────────────────┐  │  HTTPS   │  ┌────────────────┐  │
-│  │   Admin Layers    │──┼──────────┼─>│ Your Org Data  │  │
-│  │   (Streamlit)     │  │  Direct  │  │ (Users,Groups) │  │
-│  └───────────────────┘  │          │  └────────────────┘  │
-│         │               │          │                      │
-│         ▼               │          └──────────────────────┘
-│  ┌───────────────────┐  │
-│  │ Encrypted Storage │  │  Credentials encrypted at rest
-│  │ (Fernet AES-128)  │  │  with HMAC-SHA256 integrity
-│  └───────────────────┘  │
-└─────────────────────────┘
-```
-
-**Security Model:**
-- Credentials encrypted at rest with Fernet (AES-128-CBC + HMAC-SHA256)
-- Direct HTTPS API calls to Genesys Cloud (no proxy or middleware)
-- No data passes through third-party servers
-- Session isolation per browser tab
-- Audit trail stored locally
-
----
-
-## Project Structure
-
-```
-admin-layers/
-├── app.py                  # Streamlit application entry point
-├── requirements.txt        # Python dependencies
-├── core/                   # Core modules
-│   ├── __init__.py
-│   ├── encrypted_storage.py # Fernet encryption for credentials & data
-│   └── demo.py             # Demo mode with mock API and sample data
-├── genesys_cloud/          # Genesys Cloud SDK
-│   ├── __init__.py
-│   ├── api.py              # API client with sub-APIs
-│   ├── auth.py             # OAuth authentication
-│   └── config.py           # Configuration (env, secrets, file)
-├── utilities/              # Utility modules
-│   ├── __init__.py
-│   ├── base.py             # BaseUtility abstract class
-│   ├── group_manager.py    # Group management utility
-│   ├── skill_manager.py    # Skill management utility
-│   ├── queue_manager.py    # Queue management utility
-│   └── history.py          # Action history (filesystem + session)
-├── .streamlit/
-│   ├── config.toml         # Streamlit theme & server config
-│   └── secrets.toml.example # Template for deployment secrets
-├── setup.ps1               # Windows setup wizard
-└── start.ps1               # Windows start script
-```
-
----
-
-## Creating Custom Utilities
-
-Admin Layers is designed to be extensible. Create your own utilities by extending `BaseUtility`:
-
-```python
-from utilities import BaseUtility, UtilityConfig
-
-class MyUtility(BaseUtility):
-    @staticmethod
-    def get_config() -> UtilityConfig:
-        return UtilityConfig(
-            id="my_utility",
-            name="My Utility",
-            description="Does something useful",
-            icon="wrench",
-            category="Custom"
-        )
-
-    def render_sidebar(self) -> None:
-        # Add sidebar controls
-        pass
-
-    def render_main(self) -> None:
-        # Render main content
-        pass
-```
-
-Then register it in `app.py`:
-
-```python
-UTILITIES = {
-    "my_utility": MyUtility,
-    # ... other utilities
-}
-```
-
-See `utilities/TEMPLATE.py` for a complete template.
-
----
-
-## Configuration
-
-### Credential Sources (Priority Order)
-
-| Source | Use Case |
-|--------|----------|
-| Environment variables | Local development, CI/CD |
-| `st.secrets["genesys"]` | Streamlit Community Cloud |
-| Encrypted storage (UI) | Browser-based "remember me" |
-| Config file (`config.json`) | Legacy local config |
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GENESYS_CLIENT_ID` | Yes | OAuth Client ID |
-| `GENESYS_CLIENT_SECRET` | Yes | OAuth Client Secret |
-| `GENESYS_REGION` | No | Genesys region (default: `mypurecloud.com`) |
-| `ADMIN_LAYERS_KEY` | No | Encryption key for persistent storage |
+2. **Connect in App**
+   - Launch the Anvil app
+   - Enter your Client ID and Client Secret
+   - Select your region
+   - Click "Connect"
 
 ### Supported Regions
+- mypurecloud.com (US East)
+- mypurecloud.ie (Ireland)
+- mypurecloud.de (Germany)
+- mypurecloud.com.au (Australia)
+- mypurecloud.jp (Japan)
+- usw2.pure.cloud (US West)
+- cac1.pure.cloud (Canada)
+- euw2.pure.cloud (Europe West)
+- apne2.pure.cloud (Asia Pacific Northeast)
 
-| Region | Domain |
-|--------|--------|
-| US East | `mypurecloud.com` |
-| US West | `usw2.pure.cloud` |
-| Canada | `cac1.pure.cloud` |
-| EU Ireland | `mypurecloud.ie` |
-| EU Frankfurt | `mypurecloud.de` |
-| EU London | `euw2.pure.cloud` |
-| Asia Pacific (Sydney) | `mypurecloud.com.au` |
-| Asia Pacific (Tokyo) | `mypurecloud.jp` |
-| Asia Pacific (Seoul) | `apne2.pure.cloud` |
-| Asia Pacific (Mumbai) | `aps1.pure.cloud` |
+## 🎨 Customization
 
----
+### Styling
+Anvil uses Material Design by default. You can customize:
+- Colors: App Settings → Theme
+- Fonts: App Settings → Theme
+- Layout: Edit forms directly in the designer
 
-## Streamlit Community Cloud Deployment
+### Adding New Features
 
-1. **Fork** this repository
-2. Go to [share.streamlit.io](https://share.streamlit.io) and create a new app
-3. Select your fork, branch `main`, and file `app.py`
-4. In **Advanced Settings > Secrets**, add:
+1. **Add Server Functions**
+   - Edit `server_code/genesys_api.py`
+   - Add new `@anvil.server.callable` functions
+   - Call them from client code with `anvil.server.call('function_name', args)`
 
-```toml
-encryption_key = "generate-a-strong-key-here"
+2. **Add New Forms**
+   - Create new form in Anvil Forms designer
+   - Add to MainForm navigation
+   - Implement UI and logic
 
-[genesys]
-client_id = "your-client-id"
-client_secret = "your-client-secret"
-region = "mypurecloud.com"
+3. **Extend Demo Mode**
+   - Edit `server_code/demo_mode.py`
+   - Add sample data
+   - Create corresponding demo functions
+
+## 📱 Mobile Support
+
+Anvil apps work great on mobile devices:
+- Responsive design automatically adapts to screen size
+- Works in any mobile browser
+- Can be added to home screen as a PWA (Progressive Web App)
+
+## 🔒 Security
+
+### Best Practices
+1. **Never hardcode credentials** - Users enter them at login
+2. **Use HTTPS** - Anvil provides this automatically
+3. **Limit OAuth scopes** - Only grant necessary permissions
+4. **Regular audits** - Monitor bulk operations
+5. **Test in demo mode first** - Verify changes before production
+
+### Session Management
+- Each user gets their own isolated session
+- Credentials are never stored permanently
+- Session ends when user disconnects or closes browser
+
+## 🐛 Troubleshooting
+
+### "Not connected" Error
+- Make sure you've clicked "Connect" or "Demo Mode"
+- Verify OAuth credentials are correct
+- Check that your OAuth client has necessary permissions
+
+### API Errors
+- Verify OAuth client has appropriate roles
+- Check Genesys Cloud service status
+- Ensure API rate limits aren't exceeded
+
+### CSV Upload Issues
+- Check that CSV has required 'email' column
+- Verify CSV is properly formatted (no special characters)
+- Make sure emails match existing users
+
+## 📚 Development
+
+### Project Structure
+```
+anvil_app/
+├── anvil.yaml                     # App configuration
+├── server_code/
+│   ├── genesys_api.py            # Genesys Cloud API wrapper
+│   └── demo_mode.py              # Demo data and functions
+└── client_code/
+    └── forms/
+        ├── MainForm.py           # Main layout and navigation
+        ├── LoginForm.py          # Authentication
+        ├── UserManagerForm.py    # User management + bulk edit
+        ├── GroupManagerForm.py   # Group management
+        ├── QueueManagerForm.py   # Queue management
+        └── SkillManagerForm.py   # Skill management
 ```
 
-Generate an encryption key:
-```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-```
+### Technology Stack
+- **Frontend**: Anvil (Python + Material Design)
+- **Backend**: Anvil Server (Python 3)
+- **API**: Genesys Cloud Platform API
+- **Authentication**: OAuth 2.0 Client Credentials
 
-If you omit the `[genesys]` section, the app starts in disconnected mode and users can enter credentials through the UI or launch demo mode.
+## 🤝 Contributing
 
----
-
-## OAuth Client Setup
-
-To use Admin Layers with a real Genesys Cloud org, you need an OAuth client with **Client Credentials** grant:
-
-1. Go to **Genesys Cloud Admin** > **Integrations** > **OAuth**
-2. Click **Add Client**
-3. Set **Grant Type** to **Client Credentials**
-4. Add required **Scopes** based on modules you'll use:
-   - Groups: `groups`, `users:readonly`
-   - Skills: `routing`, `users`
-   - Queues: `routing:readonly`
-5. Assign a **Role** with appropriate permissions
-6. Save and copy the **Client ID** and **Client Secret**
-
----
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
+This project is open source. To contribute:
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
----
+## 📄 License
 
-## License
+MIT License - See LICENSE file for details
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🆘 Support
 
----
+For issues or questions:
+- GitHub Issues: [Create an issue](https://github.com/adminlayers/admin-layers/issues)
+- Documentation: See CLAUDE.md for development prompts
+- Anvil Forum: https://anvil.works/forum
 
-## Disclaimer
+## 🎉 Quick Start
 
-Admin Layers is not affiliated with, endorsed by, or sponsored by Genesys. Genesys Cloud is a trademark of Genesys Telecommunications Laboratories, Inc.
+1. Create an Anvil account at https://anvil.works
+2. Create a new blank app
+3. Upload server code (genesys_api.py, demo_mode.py)
+4. Create client forms (MainForm, LoginForm, UserManagerForm, etc.)
+5. Set MainForm as startup form
+6. Click Run
+7. Try "Demo Mode" to explore features
+8. Connect with Genesys OAuth credentials for production use
 
----
-
-## Support
-
-- [Website](https://adminlayers.com)
-- [Documentation](https://github.com/adminlayers/docs)
-- [Report Issues](https://github.com/adminlayers/admin-layers/issues)
-- [Discussions](https://github.com/adminlayers/admin-layers/discussions)
+That's it! You now have a fully functional Genesys Cloud administration tool.

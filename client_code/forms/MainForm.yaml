@@ -29,7 +29,7 @@ components:
     layout_properties: {width: 250}
     components:
     - type: Label
-    properties: {text: Navigation, bold: true, font_size: 16}
+      properties: {text: Navigation, bold: true, font_size: 16}
       name: nav_title
       layout_properties: {}
     - type: Button
