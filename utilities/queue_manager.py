@@ -89,45 +89,46 @@ class QueueManagerUtility(BaseUtility):
         info = self.get_state('queue_info')
         if not info:
             return
-        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 4])
-        if c1.button("\U00002795", help="Add members", key="qm_ab_add"):
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        if c1.button("+ Add", use_container_width=True, key="qm_ab_add"):
             self.set_state('page', 'add')
             st.rerun()
-        if c2.button("\U00002796", help="Remove members", key="qm_ab_rm"):
+        if c2.button("- Remove", use_container_width=True, key="qm_ab_rm"):
             self.set_state('page', 'remove')
             st.rerun()
-        if c3.button("\U00002699\uFE0F", help="Config", key="qm_ab_cfg"):
+        if c3.button("Config", use_container_width=True, key="qm_ab_cfg"):
             self.set_state('page', 'config')
             st.rerun()
-        if c4.button("\U0001F4E5", help="Export", key="qm_ab_exp"):
+        if c4.button("Export", use_container_width=True, key="qm_ab_exp"):
             self.set_state('page', 'export')
             st.rerun()
-        if c5.button("\U0000270F\ufe0f", help="Edit", key="qm_ab_edit"):
+        if c5.button("Edit", use_container_width=True, key="qm_ab_edit"):
             self.set_state('page', 'edit')
             st.rerun()
-        if c6.button("\U0001F504", help="Refresh", key="qm_ab_ref"):
+        if c6.button("Refresh", use_container_width=True, key="qm_ab_ref"):
             self._refresh_members()
             st.rerun()
 
     def _queue_header(self) -> None:
         info = self.get_state('queue_info')
         members = self.get_state('members', [])
-        c_back, c_title = st.columns([1, 8])
-        if c_back.button("\U00002B05", help="Back to list", key="qm_back"):
+        if st.button("< Back to Queues", key="qm_back"):
             self.set_state('page', 'list')
             st.rerun()
-        c_title.markdown(f"### {info.get('name', 'Queue')}")
+        st.markdown(f"### {info.get('name', 'Queue')}")
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Members", len(members))
-        c2.metric("Skill Eval", info.get('skillEvaluationMethod', 'N/A'))
         acw = info.get('acwSettings', {})
         acw_timeout = acw.get('timeoutMs')
-        c3.metric("ACW", f"{acw_timeout // 1000}s" if acw_timeout else "N/A")
+        acw_str = f"{acw_timeout // 1000}s" if acw_timeout else "N/A"
         media = info.get('mediaSettings', {})
         call_settings = media.get('call', {})
         alert = call_settings.get('alertingTimeoutSeconds')
-        c4.metric("Alert", f"{alert}s" if alert else "N/A")
+        alert_str = f"{alert}s" if alert else "N/A"
+
+        meta = (f"**{len(members)}** members · "
+                f"Skill eval: {info.get('skillEvaluationMethod', 'N/A')} · "
+                f"ACW: {acw_str} · Alert: {alert_str}")
+        st.markdown(meta)
 
         if info.get('description'):
             st.caption(info['description'])
@@ -349,7 +350,6 @@ class QueueManagerUtility(BaseUtility):
                     df['Email'].str.contains(search, case=False, na=False))
             df = df[mask]
 
-        st.caption(f"Showing {len(df)} of {len(members)}")
         st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
 
     def _page_add(self) -> None:

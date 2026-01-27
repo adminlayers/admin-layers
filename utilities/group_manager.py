@@ -86,37 +86,35 @@ class GroupManagerUtility(BaseUtility):
         info = self.get_state('group_info')
         if not info:
             return
-        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 4])
-        if c1.button("\U00002795", help="Add members", key="gm_ab_add"):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        if c1.button("+ Add", use_container_width=True, key="gm_ab_add"):
             self.set_state('page', 'add')
             st.rerun()
-        if c2.button("\U00002796", help="Remove members", key="gm_ab_rm"):
+        if c2.button("- Remove", use_container_width=True, key="gm_ab_rm"):
             self.set_state('page', 'remove')
             st.rerun()
-        if c3.button("\U0001F4E5", help="Export", key="gm_ab_exp"):
+        if c3.button("Export", use_container_width=True, key="gm_ab_exp"):
             self.set_state('page', 'export')
             st.rerun()
-        if c4.button("\U0000270F\ufe0f", help="Edit", key="gm_ab_edit"):
+        if c4.button("Edit", use_container_width=True, key="gm_ab_edit"):
             self.set_state('page', 'edit')
             st.rerun()
-        if c5.button("\U0001F504", help="Refresh", key="gm_ab_ref"):
+        if c5.button("Refresh", use_container_width=True, key="gm_ab_ref"):
             self._refresh_members()
             st.rerun()
 
     def _group_header(self) -> None:
         info = self.get_state('group_info')
         members = self.get_state('members', [])
-        c_back, c_title = st.columns([1, 8])
-        if c_back.button("\U00002B05", help="Back to list", key="gm_back"):
+        if st.button("< Back to Groups", key="gm_back"):
             self.set_state('page', 'list')
             st.rerun()
-        c_title.markdown(f"### {info.get('name', 'Group')}")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Members", len(members))
-        c2.metric("Type", info.get('type', 'N/A'))
-        c3.metric("Visibility", info.get('visibility', 'N/A'))
-        if info.get('description'):
-            st.caption(info['description'])
+        st.markdown(f"### {info.get('name', 'Group')}")
+        desc = info.get('description', '')
+        meta = f"**{len(members)}** members · {info.get('type', 'N/A')} · {info.get('visibility', 'N/A')}"
+        if desc:
+            meta += f" · {desc}"
+        st.markdown(meta)
         self._action_bar()
         st.markdown("---")
 
@@ -297,7 +295,6 @@ class GroupManagerUtility(BaseUtility):
                     df['Email'].str.contains(search, case=False, na=False))
             df = df[mask]
 
-        st.caption(f"Showing {len(df)} of {len(members)}")
         st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
 
     def _page_add(self) -> None:

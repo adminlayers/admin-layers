@@ -97,20 +97,20 @@ class UserManagerUtility(BaseUtility):
         info = self.get_state('user_info')
         if not info:
             return
-        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 4])
-        if c1.button("\U0001F465", help="Groups", key="um_ab_groups"):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        if c1.button("Groups", use_container_width=True, key="um_ab_groups"):
             self.set_state('page', 'groups')
             st.rerun()
-        if c2.button("\U0001F3AF", help="Skills", key="um_ab_skills"):
+        if c2.button("Skills", use_container_width=True, key="um_ab_skills"):
             self.set_state('page', 'skills')
             st.rerun()
-        if c3.button("\U0001F4DE", help="Queues", key="um_ab_queues"):
+        if c3.button("Queues", use_container_width=True, key="um_ab_queues"):
             self.set_state('page', 'queues')
             st.rerun()
-        if c4.button("\U0000270F\ufe0f", help="Edit", key="um_ab_edit"):
+        if c4.button("Edit", use_container_width=True, key="um_ab_edit"):
             self.set_state('page', 'edit')
             st.rerun()
-        if c5.button("\U0001F504", help="Refresh", key="um_ab_ref"):
+        if c5.button("Refresh", use_container_width=True, key="um_ab_ref"):
             self._load_user(self.get_state('user_id'))
             st.rerun()
 
@@ -118,17 +118,19 @@ class UserManagerUtility(BaseUtility):
         info = self.get_state('user_info')
         if not info:
             return
-        c_back, c_title = st.columns([1, 8])
-        if c_back.button("\U00002B05", help="Back to list", key="um_back"):
+        if st.button("< Back to Users", key="um_back"):
             self._clear_user()
             return
-        c_title.markdown(f"### {info.get('name', 'User')}")
+        st.markdown(f"### {info.get('name', 'User')}")
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("State", info.get('state', 'N/A'))
-        c2.caption(f"**Email:** {info.get('email', '')}")
-        c3.caption(f"**Dept:** {info.get('department', 'N/A')}")
-        c4.caption(f"**Title:** {info.get('title', 'N/A')}")
+        parts = [info.get('state', 'N/A')]
+        if info.get('email'):
+            parts.append(info['email'])
+        if info.get('department'):
+            parts.append(info['department'])
+        if info.get('title'):
+            parts.append(info['title'])
+        st.markdown(" · ".join(parts))
         self._action_bar()
         st.markdown("---")
 
@@ -170,8 +172,6 @@ class UserManagerUtility(BaseUtility):
         if not all_users:
             st.info("No users found in your org.")
             return
-
-        st.metric("Users Loaded", total)
 
         search = st.text_input("Search", placeholder="Filter by name, email, or department...",
                                key="um_list_search", label_visibility="collapsed")
@@ -445,7 +445,7 @@ class UserManagerUtility(BaseUtility):
             st.info("No groups found for this user.")
             return
 
-        st.metric("Groups", len(groups))
+        st.caption(f"{len(groups)} group(s)")
         df = pd.DataFrame([{
             'Name': g.get('name', ''),
             'Type': g.get('type', ''),
@@ -479,7 +479,7 @@ class UserManagerUtility(BaseUtility):
             st.info("No skills assigned to this user.")
             return
 
-        st.metric("Skills", len(skills))
+        st.caption(f"{len(skills)} skill(s)")
         df = pd.DataFrame([{
             'Skill': s.get('name', ''),
             'Proficiency': s.get('proficiency', 0),
@@ -513,7 +513,7 @@ class UserManagerUtility(BaseUtility):
             st.info("No queues found for this user.")
             return
 
-        st.metric("Queues", len(queues))
+        st.caption(f"{len(queues)} queue(s)")
         df = pd.DataFrame([{
             'Name': q.get('name', ''),
             'Members': q.get('memberCount', ''),
