@@ -40,6 +40,7 @@ class UserManagerUtility(BaseUtility):
         pages = [
             ("um_nav_list", "\U0001F4CB All Users", "list"),
             ("um_nav_search", "\U0001F50D Search", "search"),
+            ("um_nav_bulk_edit", "\U0001F4DD Bulk Edit", "bulk_edit"),
         ]
         if user_info:
             pages += [
@@ -61,7 +62,7 @@ class UserManagerUtility(BaseUtility):
             'list': self._page_list, 'search': self._page_search,
             'detail': self._page_detail, 'groups': self._page_groups,
             'skills': self._page_skills, 'queues': self._page_queues,
-            'edit': self._page_edit,
+            'edit': self._page_edit, 'bulk_edit': self._page_bulk_edit,
         }
         pages.get(page, self._page_list)()
 
@@ -520,3 +521,231 @@ class UserManagerUtility(BaseUtility):
             'ID': q.get('id', ''),
         } for q in queues])
         st.dataframe(df, use_container_width=True, hide_index=True)
+
+    def _page_bulk_edit(self) -> None:
+        st.markdown("## Bulk Edit Profiles")
+        st.markdown(
+            "Update multiple user profiles at once using a CSV file. "
+            "CSV must include an `email` column to identify users, plus any fields to update: "
+            "`name`, `department`, `title`, `state`."
+        )
+
+        tab1, tab2, tab3 = st.tabs(["📤 Upload CSV", "📋 Paste Data", "📖 Instructions"])
+
+        csv_text = ""
+        with tab1:
+            uploaded = st.file_uploader(
+                "Upload CSV file",
+                type=['csv'],
+                key="um_bulk_upload",
+                help="CSV must have an 'email' column and at least one field to update"
+            )
+            if uploaded:
+                csv_text = uploaded.read().decode('utf-8')
+                st.code(csv_text[:1000] + ("..." if len(csv_text) > 1000 else ""), language="csv")
+
+        with tab2:
+            csv_text = st.text_area(
+                "Paste CSV data",
+                height=250,
+                placeholder="email,title,department\nalice@company.com,Senior Agent,Support\nbob@company.com,Team Lead,Support",
+                key="um_bulk_paste"
+            )
+
+        with tab3:
+            st.markdown("""
+### CSV Format
+
+Your CSV file should have:
+- **Required column:** `email` (to identify the user)
+- **Optional columns:** `name`, `department`, `title`, `state`
+
+#### Example CSV:
+```csv
+email,title,department
+alice@company.com,Senior Agent,Support
+bob@company.com,Team Lead,Support
+carol@company.com,Account Executive,Sales
+```
+
+#### Example with all fields:
+```csv
+email,name,department,title,state
+alice@company.com,Alice Johnson,Support,Senior Agent,active
+bob@company.com,Bob Martinez,Support,Team Lead,active
+```
+
+### Valid States
+- `active`
+- `inactive`
+
+### Notes
+- Only include columns you want to update
+- Empty cells will skip that field for that user
+- Users not found by email will be reported
+- Use "Preview" to see what will change before applying
+            """)
+
+        st.markdown("---")
+
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="um_bulk_dryrun")
+        run = c2.button("Process", type="primary", use_container_width=True, key="um_bulk_run")
+
+        if run and csv_text:
+            self._execute_bulk_edit(csv_text, dry_run)
+
+    def _execute_bulk_edit(self, csv_text: str, dry_run: bool) -> None:
+        import io
+        import csv
+
+        st.markdown("---")
+        st.markdown("### Processing...")
+
+        # Parse CSV
+        try:
+            csv_reader = csv.DictReader(io.StringIO(csv_text))
+            rows = list(csv_reader)
+        except Exception as e:
+            st.error(f"Failed to parse CSV: {e}")
+            return
+
+        if not rows:
+            st.error("No data found in CSV.")
+            return
+
+        # Validate required column
+        if 'email' not in rows[0]:
+            st.error("CSV must have an 'email' column.")
+            return
+
+        # Supported update fields
+        update_fields = {'name', 'department', 'title', 'state'}
+        available_fields = set(rows[0].keys()) - {'email'}
+        fields_to_update = available_fields & update_fields
+
+        if not fields_to_update:
+            st.error(f"CSV must have at least one update field: {', '.join(update_fields)}")
+            return
+
+        st.info(f"Updating fields: {', '.join(sorted(fields_to_update))}")
+
+        # Resolve users and prepare updates
+        progress = st.progress(0)
+        status_text = st.empty()
+        found_users = []
+        missing_emails = []
+        updates_to_apply = []
+
+        for i, row in enumerate(rows):
+            progress.progress((i + 1) / len(rows))
+            email = row.get('email', '').strip()
+            if not email:
+                continue
+
+            status_text.text(f"Looking up: {email}")
+
+            user = self.api.users.search_by_email(email)
+            if user:
+                # Build update payload
+                payload = {}
+                for field in fields_to_update:
+                    value = row.get(field, '').strip()
+                    if value:  # Only include non-empty values
+                        payload[field] = value
+
+                if payload:
+                    found_users.append({
+                        'email': email,
+                        'name': user.get('name', ''),
+                        'id': user['id'],
+                        'current_title': user.get('title', ''),
+                        'current_dept': user.get('department', ''),
+                        'updates': payload
+                    })
+                    updates_to_apply.append({'user_id': user['id'], 'payload': payload})
+            else:
+                missing_emails.append(email)
+
+        progress.empty()
+        status_text.empty()
+
+        # Display results
+        st.markdown("---")
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.success(f"**{len(found_users)}** users found")
+            if found_users:
+                preview_data = []
+                for u in found_users:
+                    updates_str = ", ".join([f"{k}={v}" for k, v in u['updates'].items()])
+                    preview_data.append({
+                        'Email': u['email'],
+                        'Name': u['name'],
+                        'Updates': updates_str
+                    })
+                st.dataframe(
+                    pd.DataFrame(preview_data),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(400, 35 * len(preview_data) + 38)
+                )
+
+        with c2:
+            if missing_emails:
+                st.error(f"**{len(missing_emails)}** not found")
+                for e in missing_emails[:20]:
+                    st.caption(f"- {e}")
+                if len(missing_emails) > 20:
+                    st.caption(f"... and {len(missing_emails) - 20} more")
+
+        if not found_users:
+            return
+
+        if dry_run:
+            st.info(f"✓ Dry run complete. {len(found_users)} users would be updated.")
+            st.markdown("### Preview of Changes")
+            st.markdown("Remove the 'Preview only' checkbox and click 'Process' again to apply changes.")
+            return
+
+        # Apply updates
+        st.markdown("---")
+        st.markdown("### Applying Updates...")
+        apply_progress = st.progress(0)
+        apply_status = st.empty()
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        for i, update in enumerate(updates_to_apply):
+            apply_progress.progress((i + 1) / len(updates_to_apply))
+            user_email = found_users[i]['email']
+            apply_status.text(f"Updating: {user_email}")
+
+            resp = self.api.users.update(update['user_id'], update['payload'])
+            if resp.success:
+                success_count += 1
+            else:
+                error_count += 1
+                errors.append(f"{user_email}: {resp.error}")
+
+        apply_progress.empty()
+        apply_status.empty()
+
+        # Final summary
+        st.markdown("---")
+        st.markdown("### Results")
+        c1, c2 = st.columns(2)
+        c1.metric("✓ Successful", success_count)
+        c2.metric("✗ Failed", error_count)
+
+        if errors:
+            with st.expander(f"View {len(errors)} error(s)"):
+                for err in errors:
+                    st.caption(f"- {err}")
+
+        if success_count > 0:
+            st.success(f"Successfully updated {success_count} user profile(s)!")
+        if error_count > 0:
+            st.error(f"Failed to update {error_count} user profile(s). See errors above.")
