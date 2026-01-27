@@ -26,7 +26,9 @@ class SkillManagerUtility(BaseUtility):
 
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('skills', []),
-                             ('selected_skill', None), ('selected_users', [])]:
+                             ('selected_skill', None), ('selected_users', []),
+                             ('skill_id', ''), ('skill_info', None),
+                             ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
@@ -39,11 +41,19 @@ class SkillManagerUtility(BaseUtility):
 
         pages = [
             ("sm_nav_list", "\U0001F4CB All Skills", "list"),
+            ("sm_nav_create", "\U00002795 Create Skill", "create"),
             ("sm_nav_user", "\U0001F464 User Skills", "user_skills"),
             ("sm_nav_assign", "\U00002795 Bulk Assign", "assign"),
             ("sm_nav_remove", "\U00002796 Bulk Remove", "remove"),
             ("sm_nav_export", "\U0001F4E4 Export", "export"),
         ]
+        skill_info = self.get_state('skill_info')
+        if skill_info:
+            pages += [
+                ("sm_nav_detail", "\U0001F4C4 Skill Details", "detail"),
+                ("sm_nav_edit", "\U0000270F\ufe0f Edit Skill", "edit"),
+                ("sm_nav_delete", "\U0001F5D1\ufe0f Delete Skill", "delete"),
+            ]
         for key, label, page in pages:
             if st.button(label, use_container_width=True, key=key):
                 self.set_state('page', page)
@@ -55,9 +65,48 @@ class SkillManagerUtility(BaseUtility):
         pages = {
             'list': self._page_list, 'user_skills': self._page_user_skills,
             'assign': self._page_assign, 'remove': self._page_remove,
-            'export': self._page_export,
+            'export': self._page_export, 'create': self._page_create,
+            'detail': self._page_detail, 'edit': self._page_edit, 'delete': self._page_delete,
         }
         pages.get(page, self._page_list)()
+
+    def _load_skill(self, skill_id: str) -> None:
+        resp = self.api.routing.get_skill(skill_id)
+        if resp.success:
+            self.set_state('skill_id', skill_id)
+            self.set_state('skill_info', resp.data)
+            self.set_state('page', 'detail')
+        else:
+            st.error(f"Failed to load skill: {resp.error}")
+
+    def _skill_action_bar(self) -> None:
+        info = self.get_state('skill_info')
+        if not info:
+            return
+        c1, c2, c3 = st.columns([1, 1, 6])
+        if c1.button("\U0000270F\ufe0f", help="Edit", key="sm_ab_edit"):
+            self.set_state('page', 'edit')
+            st.rerun()
+        if c2.button("\U0001F504", help="Refresh", key="sm_ab_refresh"):
+            self._load_skill(info.get('id'))
+            st.rerun()
+
+    def _skill_header(self) -> None:
+        info = self.get_state('skill_info')
+        if not info:
+            return
+        c_back, c_title = st.columns([1, 8])
+        if c_back.button("\U00002B05", help="Back to list", key="sm_back"):
+            self.set_state('page', 'list')
+            st.rerun()
+        c_title.markdown(f"### {info.get('name', 'Skill')}")
+        c1, c2 = st.columns(2)
+        c1.metric("State", info.get('state', 'N/A'))
+        c2.caption(f"**ID:** {info.get('id', '')}")
+        if info.get('description'):
+            st.caption(info['description'])
+        self._skill_action_bar()
+        st.markdown("---")
 
     # -- data helpers --
 
@@ -81,16 +130,36 @@ class SkillManagerUtility(BaseUtility):
 
     def _page_list(self) -> None:
         st.markdown("## Skills")
-        skills = self.get_state('skills', [])
+        page_size = self.get_state('list_page_size', 25)
+        page_number = self.get_state('list_page_number', 1)
 
-        if not skills:
-            with st.spinner("Loading skills..."):
-                try:
-                    skills = self.api.routing.get_skills()
-                    self.set_state('skills', skills)
-                except Exception as e:
-                    st.error(f"Failed to load skills: {e}")
-                    return
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            page_size = st.selectbox(
+                "Rows per page",
+                [25, 50, 100],
+                index=[25, 50, 100].index(page_size),
+                key="sm_page_size",
+            )
+            self.set_state('list_page_size', page_size)
+        with c2:
+            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="sm_page_num"))
+            self.set_state('list_page_number', page_number)
+
+        with st.spinner("Loading skills..."):
+            resp = self.api.routing.list_skills_page(page_size=page_size, page_number=page_number)
+        if not resp.success:
+            st.error(f"Failed to load skills: {resp.error}")
+            return
+
+        data = resp.data or {}
+        skills = data.get('entities', [])
+        total = data.get('total', len(skills))
+        page_count = data.get('pageCount', 1)
+
+        if page_number > page_count:
+            self.set_state('list_page_number', page_count)
+            st.rerun()
 
         if not skills:
             st.info("No skills found in your org.")
@@ -113,8 +182,127 @@ class SkillManagerUtility(BaseUtility):
         if search and not df.empty:
             df = df[df['Name'].str.contains(search, case=False, na=False)]
 
-        st.caption(f"Showing {len(df)} of {len(skills)} skills")
+        st.caption(f"Showing {len(df)} of {total} skills (Page {page_number} of {page_count})")
         st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
+
+        st.markdown("---")
+        st.markdown("##### Open a skill")
+        filtered = skills
+        if search:
+            sl = search.lower()
+            filtered = [s for s in skills if sl in s.get('name', '').lower()]
+        options = {s.get('name', '?'): s.get('id') for s in filtered}
+        if options:
+            chosen = st.selectbox("Select skill", list(options.keys()), key="sm_list_pick",
+                                  label_visibility="collapsed")
+            if st.button("Open", type="primary", key="sm_list_open"):
+                with st.spinner("Loading..."):
+                    self._load_skill(options[chosen])
+                    st.rerun()
+
+    def _page_detail(self) -> None:
+        info = self.get_state('skill_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._skill_header()
+
+        st.markdown("### Details")
+        fields = [
+            ("ID", info.get("id")),
+            ("Name", info.get("name")),
+            ("State", info.get("state")),
+            ("Description", info.get("description")),
+        ]
+        for label, value in fields:
+            c1, c2 = st.columns([1, 3])
+            c1.markdown(f"**{label}**")
+            c2.markdown(value or "\u2014")
+
+        with st.expander("Raw JSON"):
+            st.json(info)
+
+    def _page_create(self) -> None:
+        st.markdown("## Create Skill")
+        st.warning("Creating a skill affects routing. Confirm before creating.")
+
+        with st.form("sm_create_form"):
+            name = st.text_input("Name", placeholder="Skill name")
+            description = st.text_area("Description", placeholder="Skill description")
+            state = st.selectbox("State", ["active", "inactive"], index=0)
+            confirm = st.checkbox("I confirm I want to create this skill")
+            submitted = st.form_submit_button("Create Skill", use_container_width=True)
+
+        if submitted:
+            if not confirm:
+                st.error("Confirmation required before creating a skill.")
+                return
+            if not name:
+                st.error("Skill name is required.")
+                return
+            resp = self.api.routing.create_skill(name=name, description=description, state=state)
+            if resp.success:
+                st.success("Skill created.")
+                self.set_state('skills', [])
+                self.set_state('skill_id', resp.data.get('id'))
+                self.set_state('skill_info', resp.data)
+                self.set_state('page', 'detail')
+                st.rerun()
+            else:
+                st.error(f"Failed to create skill: {resp.error}")
+
+    def _page_edit(self) -> None:
+        info = self.get_state('skill_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._skill_header()
+        st.markdown("### Edit Skill")
+
+        with st.form("sm_edit_form"):
+            name = st.text_input("Name", value=info.get('name', ''))
+            description = st.text_area("Description", value=info.get('description', ''))
+            state = st.selectbox(
+                "State",
+                ["active", "inactive"],
+                index=0 if info.get("state", "active") == "active" else 1,
+            )
+            submitted = st.form_submit_button("Save Changes", use_container_width=True)
+
+        if submitted:
+            payload = {"name": name, "description": description, "state": state}
+            resp = self.api.routing.update_skill(info.get('id'), payload)
+            if resp.success:
+                st.success("Skill updated.")
+                self.set_state('skills', [])
+                self._load_skill(info.get('id'))
+                st.rerun()
+            else:
+                st.error(f"Failed to update skill: {resp.error}")
+
+    def _page_delete(self) -> None:
+        info = self.get_state('skill_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._skill_header()
+        st.markdown("### Delete Skill")
+        st.warning("Deleting a skill is permanent. This action requires confirmation.")
+        confirm = st.checkbox("I understand this will delete the skill", key="sm_delete_confirm")
+        if st.button("Delete Skill", type="primary", disabled=not confirm, key="sm_delete_btn"):
+            resp = self.api.routing.delete_skill(info.get('id'))
+            if resp.success:
+                st.success("Skill deleted.")
+                self.set_state('skills', [])
+                self.set_state('skill_info', None)
+                self.set_state('skill_id', '')
+                self.set_state('page', 'list')
+                st.rerun()
+            else:
+                st.error(f"Failed to delete skill: {resp.error}")
 
     def _page_user_skills(self) -> None:
         st.markdown("## User Skills Lookup")

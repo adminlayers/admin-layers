@@ -26,7 +26,8 @@ class UserManagerUtility(BaseUtility):
 
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('user_info', None),
-                             ('user_id', ''), ('all_users', None)]:
+                             ('user_id', ''), ('all_users', None),
+                             ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
@@ -43,6 +44,7 @@ class UserManagerUtility(BaseUtility):
         if user_info:
             pages += [
                 ("um_nav_detail", "\U0001F4C4 Details", "detail"),
+                ("um_nav_edit", "\U0000270F\ufe0f Edit Details", "edit"),
                 ("um_nav_groups", "\U0001F465 Groups", "groups"),
                 ("um_nav_skills", "\U0001F3AF Skills", "skills"),
                 ("um_nav_queues", "\U0001F4DE Queues", "queues"),
@@ -59,6 +61,7 @@ class UserManagerUtility(BaseUtility):
             'list': self._page_list, 'search': self._page_search,
             'detail': self._page_detail, 'groups': self._page_groups,
             'skills': self._page_skills, 'queues': self._page_queues,
+            'edit': self._page_edit,
         }
         pages.get(page, self._page_list)()
 
@@ -94,7 +97,7 @@ class UserManagerUtility(BaseUtility):
         info = self.get_state('user_info')
         if not info:
             return
-        c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 5])
+        c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 4])
         if c1.button("\U0001F465", help="Groups", key="um_ab_groups"):
             self.set_state('page', 'groups')
             st.rerun()
@@ -104,7 +107,10 @@ class UserManagerUtility(BaseUtility):
         if c3.button("\U0001F4DE", help="Queues", key="um_ab_queues"):
             self.set_state('page', 'queues')
             st.rerun()
-        if c4.button("\U0001F504", help="Refresh", key="um_ab_ref"):
+        if c4.button("\U0000270F\ufe0f", help="Edit", key="um_ab_edit"):
+            self.set_state('page', 'edit')
+            st.rerun()
+        if c5.button("\U0001F504", help="Refresh", key="um_ab_ref"):
             self._load_user(self.get_state('user_id'))
             st.rerun()
 
@@ -130,18 +136,42 @@ class UserManagerUtility(BaseUtility):
 
     def _page_list(self) -> None:
         st.markdown("## Users")
-        all_users = self.get_state('all_users')
+        page_size = self.get_state('list_page_size', 25)
+        page_number = self.get_state('list_page_number', 1)
 
-        if all_users is None:
-            with st.spinner("Loading users (this may take a moment)..."):
-                all_users = list(self.api.users.list(page_size=100, max_pages=5))
-                self.set_state('all_users', all_users)
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            page_size = st.selectbox(
+                "Rows per page",
+                [25, 50, 100],
+                index=[25, 50, 100].index(page_size),
+                key="um_page_size",
+            )
+            self.set_state('list_page_size', page_size)
+        with c2:
+            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="um_page_num"))
+            self.set_state('list_page_number', page_number)
+
+        with st.spinner("Loading users (this may take a moment)..."):
+            resp = self.api.users.list_page(page_size=page_size, page_number=page_number)
+        if not resp.success:
+            st.error(f"Failed to load users: {resp.error}")
+            return
+
+        data = resp.data or {}
+        all_users = data.get('entities', [])
+        total = data.get('total', len(all_users))
+        page_count = data.get('pageCount', 1)
+
+        if page_number > page_count:
+            self.set_state('list_page_number', page_count)
+            st.rerun()
 
         if not all_users:
             st.info("No users found in your org.")
             return
 
-        st.metric("Users Loaded", len(all_users))
+        st.metric("Users Loaded", total)
 
         search = st.text_input("Search", placeholder="Filter by name, email, or department...",
                                key="um_list_search", label_visibility="collapsed")
@@ -162,7 +192,7 @@ class UserManagerUtility(BaseUtility):
                     df['Department'].str.lower().str.contains(sl, na=False))
             df = df[mask]
 
-        st.caption(f"Showing {len(df)} users")
+        st.caption(f"Showing {len(df)} of {total} users (Page {page_number} of {page_count})")
         st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
         st.markdown("---")
@@ -241,7 +271,17 @@ class UserManagerUtility(BaseUtility):
 
         self._user_header()
 
-        st.markdown("### Profile")
+        st.markdown("## User Profile")
+        st.caption("Expanded profile view with quick actions to manage group, skill, and queue access.")
+
+        stats = st.columns(4)
+        stats[0].metric("State", info.get('state', 'N/A'))
+        stats[1].metric("Department", info.get('department', 'N/A'))
+        stats[2].metric("Title", info.get('title', 'N/A'))
+        stats[3].metric("ID", info.get('id', ''))
+
+        st.markdown("---")
+        st.markdown("### Profile Details")
         fields = [
             ("ID", info.get('id')),
             ("Email", info.get('email')),
@@ -272,6 +312,105 @@ class UserManagerUtility(BaseUtility):
 
         with st.expander("Raw JSON"):
             st.json(info)
+
+        st.markdown("---")
+        st.markdown("## Quick Actions")
+        tab_group, tab_skill, tab_queue = st.tabs(["Add to Group", "Assign Skill", "Add to Queue"])
+
+        with tab_group:
+            group_query = st.text_input("Search groups", placeholder="Start typing a group name...", key="um_quick_group")
+            group_options = []
+            if group_query:
+                group_options = self.api.groups.search(group_query)
+            if group_options:
+                group_map = {g.get('name', '?'): g.get('id') for g in group_options}
+                selected_group = st.selectbox("Select group", list(group_map.keys()), key="um_quick_group_pick")
+                confirm = st.checkbox("I confirm adding this user to the group", key="um_quick_group_confirm")
+                if st.button("Add to Group", type="primary", disabled=not confirm, key="um_quick_group_btn"):
+                    resp = self.api.groups.add_members(group_map[selected_group], [info['id']])
+                    if resp.success:
+                        st.success("User added to group.")
+                        self.set_state('user_groups', None)
+                    else:
+                        st.error(f"Failed to add to group: {resp.error}")
+            else:
+                st.caption("Enter a group search term to load matches.")
+
+        with tab_skill:
+            skills = self.api.routing.get_skills()
+            if skills:
+                skill_map = {s.get('name', ''): s.get('id') for s in skills}
+                selected_skill = st.selectbox("Select skill", list(skill_map.keys()), key="um_quick_skill_pick")
+                proficiency = st.slider("Proficiency", 0.0, 5.0, 3.0, 0.5, key="um_quick_prof")
+                confirm = st.checkbox("I confirm assigning this skill", key="um_quick_skill_confirm")
+                if st.button("Assign Skill", type="primary", disabled=not confirm, key="um_quick_skill_btn"):
+                    resp = self.api.routing.add_user_skill(info['id'], skill_map[selected_skill], proficiency)
+                    if resp.success:
+                        st.success("Skill assigned.")
+                        self.set_state('user_skills_list', None)
+                    else:
+                        st.error(f"Failed to assign skill: {resp.error}")
+            else:
+                st.info("No skills available.")
+
+        with tab_queue:
+            queue_query = st.text_input("Search queues", placeholder="Start typing a queue name...", key="um_quick_queue")
+            queue_options = []
+            if queue_query:
+                queue_options = self.api.queues.search(queue_query)
+            if queue_options:
+                queue_map = {q.get('name', '?'): q.get('id') for q in queue_options}
+                selected_queue = st.selectbox("Select queue", list(queue_map.keys()), key="um_quick_queue_pick")
+                confirm = st.checkbox("I confirm adding this user to the queue", key="um_quick_queue_confirm")
+                if st.button("Add to Queue", type="primary", disabled=not confirm, key="um_quick_queue_btn"):
+                    resp = self.api.queues.add_members(queue_map[selected_queue], [info['id']])
+                    if resp.success:
+                        st.success("User added to queue.")
+                        self.set_state('user_queues_list', None)
+                    else:
+                        st.error(f"Failed to add to queue: {resp.error}")
+            else:
+                st.caption("Enter a queue search term to load matches.")
+
+    def _page_edit(self) -> None:
+        info = self.get_state('user_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+
+        self._user_header()
+        st.markdown("### Edit User Details")
+
+        with st.form("um_edit_form"):
+            name = st.text_input("Name", value=info.get('name', ''))
+            department = st.text_input("Department", value=info.get('department', ''))
+            title = st.text_input("Title", value=info.get('title', ''))
+            state = st.selectbox(
+                "State",
+                ["active", "inactive"],
+                index=0 if info.get("state", "active") == "active" else 1,
+            )
+            confirm = st.checkbox("I confirm updating this user", key="um_edit_confirm")
+            submitted = st.form_submit_button("Save Changes", use_container_width=True)
+
+        if submitted:
+            if not confirm:
+                st.error("Confirmation required before updating the user.")
+                return
+            payload = {
+                "name": name,
+                "department": department,
+                "title": title,
+                "state": state,
+            }
+            resp = self.api.users.update(info['id'], payload)
+            if resp.success:
+                st.success("User updated.")
+                self._load_user(info['id'])
+                st.rerun()
+            else:
+                st.error(f"Failed to update user: {resp.error}")
 
     def _page_groups(self) -> None:
         info = self.get_state('user_info')

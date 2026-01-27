@@ -182,6 +182,30 @@ class GenesysCloudAPI:
 
             page += 1
 
+    def get_page(
+        self,
+        endpoint: str,
+        page_size: int = 25,
+        page_number: int = 1,
+        params: Optional[Dict] = None
+    ) -> APIResponse:
+        """
+        Fetch a single page of results from a paginated endpoint.
+
+        Args:
+            endpoint: API endpoint
+            page_size: Results per page
+            page_number: Page number to fetch
+            params: Additional query parameters
+
+        Returns:
+            APIResponse with page data
+        """
+        params = params or {}
+        params["pageSize"] = page_size
+        params["pageNumber"] = page_number
+        return self.get(endpoint, params=params)
+
 
 class UsersAPI:
     """Users API operations."""
@@ -261,6 +285,14 @@ class UsersAPI:
             User dicts
         """
         yield from self._client.paginate('/api/v2/users', page_size=page_size, max_pages=max_pages)
+
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
+        """List users for a specific page."""
+        return self._client.get_page('/api/v2/users', page_size=page_size, page_number=page_number)
+
+    def update(self, user_id: str, data: Dict[str, Any]) -> APIResponse:
+        """Update user details."""
+        return self._client.patch(f'/api/v2/users/{user_id}', json=data)
 
 
 class GroupsAPI:
@@ -342,6 +374,29 @@ class GroupsAPI:
         """List all groups."""
         yield from self._client.paginate('/api/v2/groups', page_size=page_size)
 
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
+        """List groups for a specific page."""
+        return self._client.get_page('/api/v2/groups', page_size=page_size, page_number=page_number)
+
+    def create(self, name: str, description: str, group_type: str, visibility: str) -> APIResponse:
+        """Create a new group."""
+        body = {
+            "name": name,
+            "description": description,
+            "type": group_type,
+            "visibility": visibility,
+            "rulesVisible": True,
+        }
+        return self._client.post('/api/v2/groups', json=body)
+
+    def update(self, group_id: str, data: Dict[str, Any]) -> APIResponse:
+        """Update group details."""
+        return self._client.patch(f'/api/v2/groups/{group_id}', json=data)
+
+    def delete(self, group_id: str) -> APIResponse:
+        """Delete a group."""
+        return self._client.delete(f'/api/v2/groups/{group_id}')
+
 
 class QueuesAPI:
     """Queues API operations."""
@@ -383,6 +438,22 @@ class QueuesAPI:
     def list(self, page_size: int = 100) -> Generator[Dict, None, None]:
         """List all queues."""
         yield from self._client.paginate('/api/v2/routing/queues', page_size=page_size)
+
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
+        """List queues for a specific page."""
+        return self._client.get_page('/api/v2/routing/queues', page_size=page_size, page_number=page_number)
+
+    def create(self, data: Dict[str, Any]) -> APIResponse:
+        """Create a new queue."""
+        return self._client.post('/api/v2/routing/queues', json=data)
+
+    def update(self, queue_id: str, data: Dict[str, Any]) -> APIResponse:
+        """Update queue details."""
+        return self._client.patch(f'/api/v2/routing/queues/{queue_id}', json=data)
+
+    def delete(self, queue_id: str) -> APIResponse:
+        """Delete a queue."""
+        return self._client.delete(f'/api/v2/routing/queues/{queue_id}')
 
 
 class ConversationsAPI:
@@ -442,6 +513,14 @@ class RoutingAPI:
         """Get all routing skills."""
         return list(self._client.paginate('/api/v2/routing/skills'))
 
+    def get_skill(self, skill_id: str) -> APIResponse:
+        """Get routing skill by ID."""
+        return self._client.get(f'/api/v2/routing/skills/{skill_id}')
+
+    def list_skills_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
+        """List routing skills for a specific page."""
+        return self._client.get_page('/api/v2/routing/skills', page_size=page_size, page_number=page_number)
+
     def get_languages(self) -> List[Dict]:
         """Get all routing languages."""
         return list(self._client.paginate('/api/v2/routing/languages'))
@@ -465,3 +544,20 @@ class RoutingAPI:
     def remove_user_skill(self, user_id: str, skill_id: str) -> APIResponse:
         """Remove skill from user."""
         return self._client.delete(f'/api/v2/users/{user_id}/routingskills/{skill_id}')
+
+    def create_skill(self, name: str, description: str, state: str) -> APIResponse:
+        """Create a new routing skill."""
+        body = {
+            "name": name,
+            "description": description,
+            "state": state,
+        }
+        return self._client.post('/api/v2/routing/skills', json=body)
+
+    def update_skill(self, skill_id: str, data: Dict[str, Any]) -> APIResponse:
+        """Update routing skill."""
+        return self._client.put(f'/api/v2/routing/skills/{skill_id}', json=data)
+
+    def delete_skill(self, skill_id: str) -> APIResponse:
+        """Delete routing skill."""
+        return self._client.delete(f'/api/v2/routing/skills/{skill_id}')

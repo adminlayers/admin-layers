@@ -232,6 +232,31 @@ class DemoUsersAPI:
         for u in DEMO_USERS:
             yield u
 
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> MockAPIResponse:
+        start = (page_number - 1) * page_size
+        end = start + page_size
+        entities = DEMO_USERS[start:end]
+        total = len(DEMO_USERS)
+        page_count = max(1, (total + page_size - 1) // page_size)
+        return MockAPIResponse(
+            success=True,
+            data={
+                "entities": entities,
+                "pageNumber": page_number,
+                "pageSize": page_size,
+                "pageCount": page_count,
+                "total": total,
+            },
+            status_code=200,
+        )
+
+    def update(self, user_id: str, data: Dict[str, Any]) -> MockAPIResponse:
+        for user in DEMO_USERS:
+            if user["id"] == user_id:
+                user.update(data)
+                return MockAPIResponse(success=True, data=user, status_code=200)
+        return MockAPIResponse(success=False, error="User not found", status_code=404)
+
 
 class DemoGroupsAPI:
     """Mock Groups API."""
@@ -250,18 +275,72 @@ class DemoGroupsAPI:
         return DEMO_GROUP_MEMBERS.get(group_id, [])
 
     def add_members(self, group_id: str, member_ids: List[str]) -> MockAPIResponse:
-        return MockAPIResponse(
-            success=True,
-            data={"added": len(member_ids)},
-            status_code=200
-        )
+        members = DEMO_GROUP_MEMBERS.setdefault(group_id, [])
+        existing_ids = {m["id"] for m in members}
+        for uid in member_ids:
+            if uid not in existing_ids:
+                user = next((u for u in DEMO_USERS if u["id"] == uid), None)
+                if user:
+                    members.append(user)
+        return MockAPIResponse(success=True, data={"added": len(member_ids)}, status_code=200)
 
     def remove_members(self, group_id: str, member_ids: List[str]) -> MockAPIResponse:
+        members = DEMO_GROUP_MEMBERS.get(group_id, [])
+        DEMO_GROUP_MEMBERS[group_id] = [m for m in members if m["id"] not in member_ids]
         return MockAPIResponse(success=True, data=None, status_code=204)
 
     def list(self, page_size: int = 100) -> Generator[Dict, None, None]:
         for g in DEMO_GROUPS:
             yield g
+
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> MockAPIResponse:
+        start = (page_number - 1) * page_size
+        end = start + page_size
+        entities = DEMO_GROUPS[start:end]
+        total = len(DEMO_GROUPS)
+        page_count = max(1, (total + page_size - 1) // page_size)
+        return MockAPIResponse(
+            success=True,
+            data={
+                "entities": entities,
+                "pageNumber": page_number,
+                "pageSize": page_size,
+                "pageCount": page_count,
+                "total": total,
+            },
+            status_code=200,
+        )
+
+    def create(self, name: str, description: str, group_type: str, visibility: str) -> MockAPIResponse:
+        group_id = f"grp-{uuid.uuid4().hex[:6]}"
+        group = {
+            "id": group_id,
+            "name": name,
+            "description": description,
+            "memberCount": 0,
+            "state": "active",
+            "type": group_type,
+            "visibility": visibility,
+            "rulesVisible": True,
+        }
+        DEMO_GROUPS.append(group)
+        DEMO_GROUP_MEMBERS[group_id] = []
+        return MockAPIResponse(success=True, data=group, status_code=200)
+
+    def update(self, group_id: str, data: Dict[str, Any]) -> MockAPIResponse:
+        for group in DEMO_GROUPS:
+            if group["id"] == group_id:
+                group.update(data)
+                return MockAPIResponse(success=True, data=group, status_code=200)
+        return MockAPIResponse(success=False, error="Group not found", status_code=404)
+
+    def delete(self, group_id: str) -> MockAPIResponse:
+        for idx, group in enumerate(DEMO_GROUPS):
+            if group["id"] == group_id:
+                DEMO_GROUPS.pop(idx)
+                DEMO_GROUP_MEMBERS.pop(group_id, None)
+                return MockAPIResponse(success=True, data=None, status_code=204)
+        return MockAPIResponse(success=False, error="Group not found", status_code=404)
 
 
 class DemoQueuesAPI:
@@ -281,14 +360,73 @@ class DemoQueuesAPI:
         return DEMO_QUEUE_MEMBERS.get(queue_id, [])
 
     def add_members(self, queue_id: str, member_ids: List[str]) -> MockAPIResponse:
+        members = DEMO_QUEUE_MEMBERS.setdefault(queue_id, [])
+        existing_ids = {m["id"] for m in members}
+        for uid in member_ids:
+            if uid not in existing_ids:
+                user = next((u for u in DEMO_USERS if u["id"] == uid), None)
+                if user:
+                    members.append(user)
         return MockAPIResponse(success=True, data={"added": len(member_ids)}, status_code=200)
 
     def remove_members(self, queue_id: str, member_ids: List[str]) -> MockAPIResponse:
+        members = DEMO_QUEUE_MEMBERS.get(queue_id, [])
+        DEMO_QUEUE_MEMBERS[queue_id] = [m for m in members if m["id"] not in member_ids]
         return MockAPIResponse(success=True, data=None, status_code=200)
 
     def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
         for q in DEMO_QUEUES:
             yield q
+
+    def list_page(self, page_size: int = 25, page_number: int = 1) -> MockAPIResponse:
+        start = (page_number - 1) * page_size
+        end = start + page_size
+        entities = DEMO_QUEUES[start:end]
+        total = len(DEMO_QUEUES)
+        page_count = max(1, (total + page_size - 1) // page_size)
+        return MockAPIResponse(
+            success=True,
+            data={
+                "entities": entities,
+                "pageNumber": page_number,
+                "pageSize": page_size,
+                "pageCount": page_count,
+                "total": total,
+            },
+            status_code=200,
+        )
+
+    def create(self, data: Dict[str, Any]) -> MockAPIResponse:
+        queue_id = f"queue-{uuid.uuid4().hex[:6]}"
+        queue = {
+            "id": queue_id,
+            "memberCount": 0,
+            "mediaSettings": data.get("mediaSettings", {"call": {"alertingTimeoutSeconds": 30}}),
+            "acwSettings": data.get("acwSettings", {"wrapupPrompt": "MANDATORY", "timeoutMs": 60000}),
+            "skillEvaluationMethod": data.get("skillEvaluationMethod", "BEST"),
+            "callingPartyName": data.get("callingPartyName", ""),
+            "callingPartyNumber": data.get("callingPartyNumber", ""),
+            "name": data.get("name", "New Queue"),
+            "description": data.get("description", ""),
+        }
+        DEMO_QUEUES.append(queue)
+        DEMO_QUEUE_MEMBERS[queue_id] = []
+        return MockAPIResponse(success=True, data=queue, status_code=200)
+
+    def update(self, queue_id: str, data: Dict[str, Any]) -> MockAPIResponse:
+        for queue in DEMO_QUEUES:
+            if queue["id"] == queue_id:
+                queue.update(data)
+                return MockAPIResponse(success=True, data=queue, status_code=200)
+        return MockAPIResponse(success=False, error="Queue not found", status_code=404)
+
+    def delete(self, queue_id: str) -> MockAPIResponse:
+        for idx, queue in enumerate(DEMO_QUEUES):
+            if queue["id"] == queue_id:
+                DEMO_QUEUES.pop(idx)
+                DEMO_QUEUE_MEMBERS.pop(queue_id, None)
+                return MockAPIResponse(success=True, data=None, status_code=204)
+        return MockAPIResponse(success=False, error="Queue not found", status_code=404)
 
 
 class DemoRoutingAPI:
@@ -296,6 +434,30 @@ class DemoRoutingAPI:
 
     def get_skills(self) -> List[Dict]:
         return DEMO_SKILLS
+
+    def get_skill(self, skill_id: str) -> MockAPIResponse:
+        for skill in DEMO_SKILLS:
+            if skill["id"] == skill_id:
+                return MockAPIResponse(success=True, data=skill, status_code=200)
+        return MockAPIResponse(success=False, error="Skill not found", status_code=404)
+
+    def list_skills_page(self, page_size: int = 25, page_number: int = 1) -> MockAPIResponse:
+        start = (page_number - 1) * page_size
+        end = start + page_size
+        entities = DEMO_SKILLS[start:end]
+        total = len(DEMO_SKILLS)
+        page_count = max(1, (total + page_size - 1) // page_size)
+        return MockAPIResponse(
+            success=True,
+            data={
+                "entities": entities,
+                "pageNumber": page_number,
+                "pageSize": page_size,
+                "pageCount": page_count,
+                "total": total,
+            },
+            status_code=200,
+        )
 
     def get_languages(self) -> List[Dict]:
         return [{"id": "lang-001", "name": "English", "state": "active"},
@@ -310,10 +472,42 @@ class DemoRoutingAPI:
         return DEMO_USER_SKILLS.get(user_id, [])
 
     def add_user_skill(self, user_id: str, skill_id: str, proficiency: float = 1.0) -> MockAPIResponse:
+        assignments = DEMO_USER_SKILLS.setdefault(user_id, [])
+        skill = next((s for s in DEMO_SKILLS if s["id"] == skill_id), None)
+        if skill:
+            if not any(s["id"] == skill_id for s in assignments):
+                assignments.append({
+                    "id": skill_id,
+                    "name": skill["name"],
+                    "state": skill.get("state", "active"),
+                    "proficiency": proficiency,
+                })
         return MockAPIResponse(success=True, data={"id": skill_id}, status_code=200)
 
     def remove_user_skill(self, user_id: str, skill_id: str) -> MockAPIResponse:
+        assignments = DEMO_USER_SKILLS.get(user_id, [])
+        DEMO_USER_SKILLS[user_id] = [s for s in assignments if s.get("id") != skill_id]
         return MockAPIResponse(success=True, data=None, status_code=204)
+
+    def create_skill(self, name: str, description: str, state: str) -> MockAPIResponse:
+        skill_id = f"skill-{uuid.uuid4().hex[:6]}"
+        skill = {"id": skill_id, "name": name, "description": description, "state": state}
+        DEMO_SKILLS.append(skill)
+        return MockAPIResponse(success=True, data=skill, status_code=200)
+
+    def update_skill(self, skill_id: str, data: Dict[str, Any]) -> MockAPIResponse:
+        for skill in DEMO_SKILLS:
+            if skill["id"] == skill_id:
+                skill.update(data)
+                return MockAPIResponse(success=True, data=skill, status_code=200)
+        return MockAPIResponse(success=False, error="Skill not found", status_code=404)
+
+    def delete_skill(self, skill_id: str) -> MockAPIResponse:
+        for idx, skill in enumerate(DEMO_SKILLS):
+            if skill["id"] == skill_id:
+                DEMO_SKILLS.pop(idx)
+                return MockAPIResponse(success=True, data=None, status_code=204)
+        return MockAPIResponse(success=False, error="Skill not found", status_code=404)
 
 
 class DemoConversationsAPI:
