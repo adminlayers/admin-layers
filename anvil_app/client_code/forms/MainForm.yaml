@@ -1,0 +1,76 @@
+container:
+  type: ColumnPanel
+components:
+- type: FlowPanel
+  properties: {role: navbar, align: left, spacing: medium, foreground: 'theme:On Primary Container', background: 'theme:Primary Container'}
+  name: navbar
+  layout_properties: {grid_position: 'QHWTFZ,GHBTDV'}
+  components:
+  - type: Label
+    properties: {text: '⚙️ Admin Layers', bold: true, font_size: 20}
+    name: app_title
+    layout_properties: {}
+  - type: Spacer
+    properties: {height: 32}
+    name: spacer_1
+    layout_properties: {width: 367}
+  - type: Label
+    properties: {text: Connected, font_size: 14}
+    name: connection_label
+    layout_properties: {}
+- type: LinearPanel
+  properties: {spacing: none}
+  name: main_content
+  layout_properties: {grid_position: 'SGLSNY,ULJNLJ'}
+  components:
+  - type: ColumnPanel
+    properties: {role: card, spacing: small, background: 'theme:Surface Container'}
+    name: nav_panel
+    layout_properties: {width: 250}
+    components:
+    - type: Label
+    properties: {text: Navigation, bold: true, font_size: 16}
+      name: nav_title
+      layout_properties: {}
+    - type: Button
+      properties: {text: Home, icon: 'fa:home', role: null}
+      name: nav_home_btn
+      layout_properties: {}
+    - type: Spacer
+      properties: {height: 10}
+      name: spacer_2
+      layout_properties: {}
+    - type: Label
+      properties: {text: Utilities, bold: true, font_size: 14, foreground: 'theme:On Surface Variant'}
+      name: utilities_label
+      layout_properties: {}
+    - type: Button
+      properties: {text: User Manager, icon: 'fa:user', role: null}
+      name: nav_users_btn
+      layout_properties: {}
+    - type: Button
+      properties: {text: Group Manager, icon: 'fa:users', role: null}
+      name: nav_groups_btn
+      layout_properties: {}
+    - type: Button
+      properties: {text: Queue Manager, icon: 'fa:phone', role: null}
+      name: nav_queues_btn
+      layout_properties: {}
+    - type: Button
+      properties: {text: Skill Manager, icon: 'fa:star', role: null}
+      name: nav_skills_btn
+      layout_properties: {}
+    - type: Spacer
+      properties: {}
+      name: spacer_3
+      layout_properties: {}
+    - type: Button
+      properties: {text: Disconnect, icon: 'fa:sign-out', foreground: 'theme:Error'}
+      name: disconnect_btn
+      layout_properties: {}
+  - type: ColumnPanel
+    properties: {spacing: medium}
+    name: content_panel
+    layout_properties: {width: null}
+    components: []
+is_package: true

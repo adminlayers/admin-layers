@@ -1,0 +1,19 @@
+allow_embedding: false
+package_name: Admin_Layers
+name: Admin Layers
+runtime_options:
+  version: 2
+  client_version: '3'
+  server_version: python3-full
+startup: {type: form, module: MainForm}
+startup_form: null
+db_schema: {}
+services:
+- source: /runtime/services/tables.yml
+  client_config: {}
+  server_config: {}
+- source: /runtime/services/anvil/users.yml
+  client_config: {allow_signup: false, enable_automatically: true, use_email: true,
+    confirm_email: false, allow_remember_me: true, require_secure_passwords: true}
+  server_config: {user_table: users}
+metadata: {title: Admin Layers, description: 'Genesys Cloud Administration Tool - Bulk operations for users, groups, queues, and skills', logo_img: 'asset:logo.png'}
