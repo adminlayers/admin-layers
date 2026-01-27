@@ -27,7 +27,8 @@ class QueueManagerUtility(BaseUtility):
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('queue_id', ''),
                              ('queue_info', None), ('members', []),
-                             ('all_queues', None)]:
+                             ('all_queues', None),
+                             ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
@@ -38,6 +39,7 @@ class QueueManagerUtility(BaseUtility):
             st.caption(f"Selected: **{queue_info.get('name', '')}**")
         pages = [
             ("qm_nav_list", "\U0001F4CB All Queues", "list"),
+            ("qm_nav_create", "\U00002795 Create Queue", "create"),
         ]
         if queue_info:
             pages += [
@@ -45,6 +47,8 @@ class QueueManagerUtility(BaseUtility):
                 ("qm_nav_add", "\U00002795 Add Members", "add"),
                 ("qm_nav_remove", "\U00002796 Remove Members", "remove"),
                 ("qm_nav_config", "\U00002699\uFE0F Config", "config"),
+                ("qm_nav_edit", "\U0000270F\ufe0f Edit Queue", "edit"),
+                ("qm_nav_delete", "\U0001F5D1\ufe0f Delete Queue", "delete"),
                 ("qm_nav_export", "\U0001F4E5 Export", "export"),
             ]
         for key, label, page in pages:
@@ -59,6 +63,7 @@ class QueueManagerUtility(BaseUtility):
             'list': self._page_list, 'view': self._page_view,
             'add': self._page_add, 'remove': self._page_remove,
             'config': self._page_config, 'export': self._page_export,
+            'create': self._page_create, 'edit': self._page_edit, 'delete': self._page_delete,
         }.get(page, self._page_list)()
 
     # -- helpers --
@@ -97,7 +102,10 @@ class QueueManagerUtility(BaseUtility):
         if c4.button("\U0001F4E5", help="Export", key="qm_ab_exp"):
             self.set_state('page', 'export')
             st.rerun()
-        if c5.button("\U0001F504", help="Refresh", key="qm_ab_ref"):
+        if c5.button("\U0000270F\ufe0f", help="Edit", key="qm_ab_edit"):
+            self.set_state('page', 'edit')
+            st.rerun()
+        if c6.button("\U0001F504", help="Refresh", key="qm_ab_ref"):
             self._refresh_members()
             st.rerun()
 
@@ -130,12 +138,36 @@ class QueueManagerUtility(BaseUtility):
 
     def _page_list(self) -> None:
         st.markdown("## Queues")
-        all_queues = self.get_state('all_queues')
+        page_size = self.get_state('list_page_size', 25)
+        page_number = self.get_state('list_page_number', 1)
 
-        if all_queues is None:
-            with st.spinner("Loading queues..."):
-                all_queues = list(self.api.queues.list(page_size=100))
-                self.set_state('all_queues', all_queues)
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            page_size = st.selectbox(
+                "Rows per page",
+                [25, 50, 100],
+                index=[25, 50, 100].index(page_size),
+                key="qm_page_size",
+            )
+            self.set_state('list_page_size', page_size)
+        with c2:
+            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="qm_page_num"))
+            self.set_state('list_page_number', page_number)
+
+        with st.spinner("Loading queues..."):
+            resp = self.api.queues.list_page(page_size=page_size, page_number=page_number)
+        if not resp.success:
+            st.error(f"Failed to load queues: {resp.error}")
+            return
+
+        data = resp.data or {}
+        all_queues = data.get('entities', [])
+        total = data.get('total', len(all_queues))
+        page_count = data.get('pageCount', 1)
+
+        if page_number > page_count:
+            self.set_state('list_page_number', page_count)
+            st.rerun()
 
         if not all_queues:
             st.info("No queues found in your org.")
@@ -154,7 +186,7 @@ class QueueManagerUtility(BaseUtility):
         if search and not df.empty:
             df = df[df['Name'].str.contains(search, case=False, na=False)]
 
-        st.caption(f"{len(df)} queues")
+        st.caption(f"Showing {len(df)} of {total} queues (Page {page_number} of {page_count})")
         st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
         st.markdown("---")
@@ -171,6 +203,124 @@ class QueueManagerUtility(BaseUtility):
                 with st.spinner("Loading..."):
                     self._load_queue(options[chosen])
                     st.rerun()
+
+    def _page_create(self) -> None:
+        st.markdown("## Create Queue")
+        st.warning("Creating a queue affects routing. Confirm before creating.")
+
+        with st.form("qm_create_form"):
+            name = st.text_input("Name", placeholder="Queue name")
+            description = st.text_area("Description", placeholder="Queue description")
+            skill_eval = st.selectbox("Skill Evaluation", ["BEST", "ALL"], index=0)
+            calling_party_name = st.text_input("Calling Party Name", placeholder="Outbound display name")
+            calling_party_number = st.text_input("Calling Party Number", placeholder="+18005551234")
+            acw_timeout = st.number_input("ACW Timeout (seconds)", min_value=0, value=60, step=5)
+            alert_timeout = st.number_input("Alert Timeout (seconds)", min_value=0, value=30, step=5)
+            confirm = st.checkbox("I confirm I want to create this queue")
+            submitted = st.form_submit_button("Create Queue", use_container_width=True)
+
+        if submitted:
+            if not confirm:
+                st.error("Confirmation required before creating a queue.")
+                return
+            if not name:
+                st.error("Queue name is required.")
+                return
+            payload = {
+                "name": name,
+                "description": description,
+                "skillEvaluationMethod": skill_eval,
+                "callingPartyName": calling_party_name,
+                "callingPartyNumber": calling_party_number,
+                "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": int(acw_timeout * 1000)},
+                "mediaSettings": {"call": {"alertingTimeoutSeconds": int(alert_timeout)}},
+            }
+            resp = self.api.queues.create(payload)
+            if resp.success:
+                st.success("Queue created.")
+                self.set_state('queue_id', resp.data.get('id'))
+                self.set_state('queue_info', resp.data)
+                self.set_state('page', 'view')
+                st.rerun()
+            else:
+                st.error(f"Failed to create queue: {resp.error}")
+
+    def _page_edit(self) -> None:
+        info = self.get_state('queue_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._queue_header()
+        st.markdown("### Edit Queue")
+
+        acw = info.get('acwSettings', {}) or {}
+        media = info.get('mediaSettings', {}) or {}
+        call_settings = media.get('call', {}) if isinstance(media, dict) else {}
+
+        with st.form("qm_edit_form"):
+            name = st.text_input("Name", value=info.get('name', ''))
+            description = st.text_area("Description", value=info.get('description', ''))
+            skill_eval = st.selectbox(
+                "Skill Evaluation",
+                ["BEST", "ALL"],
+                index=0 if info.get("skillEvaluationMethod", "BEST") == "BEST" else 1,
+            )
+            calling_party_name = st.text_input("Calling Party Name", value=info.get('callingPartyName', ''))
+            calling_party_number = st.text_input("Calling Party Number", value=info.get('callingPartyNumber', ''))
+            acw_timeout = st.number_input(
+                "ACW Timeout (seconds)",
+                min_value=0,
+                value=int((acw.get("timeoutMs") or 60000) / 1000),
+                step=5,
+            )
+            alert_timeout = st.number_input(
+                "Alert Timeout (seconds)",
+                min_value=0,
+                value=int(call_settings.get("alertingTimeoutSeconds") or 30),
+                step=5,
+            )
+            submitted = st.form_submit_button("Save Changes", use_container_width=True)
+
+        if submitted:
+            payload = {
+                "name": name,
+                "description": description,
+                "skillEvaluationMethod": skill_eval,
+                "callingPartyName": calling_party_name,
+                "callingPartyNumber": calling_party_number,
+                "acwSettings": {"wrapupPrompt": acw.get("wrapupPrompt", "MANDATORY"),
+                                 "timeoutMs": int(acw_timeout * 1000)},
+                "mediaSettings": {"call": {"alertingTimeoutSeconds": int(alert_timeout)}},
+            }
+            resp = self.api.queues.update(info.get('id'), payload)
+            if resp.success:
+                st.success("Queue updated.")
+                self._load_queue(info.get('id'))
+                st.rerun()
+            else:
+                st.error(f"Failed to update queue: {resp.error}")
+
+    def _page_delete(self) -> None:
+        info = self.get_state('queue_info')
+        if not info:
+            self.set_state('page', 'list')
+            st.rerun()
+            return
+        self._queue_header()
+        st.markdown("### Delete Queue")
+        st.warning("Deleting a queue is permanent. This action requires confirmation.")
+        confirm = st.checkbox("I understand this will delete the queue", key="qm_delete_confirm")
+        if st.button("Delete Queue", type="primary", disabled=not confirm, key="qm_delete_btn"):
+            resp = self.api.queues.delete(info.get('id'))
+            if resp.success:
+                st.success("Queue deleted.")
+                self.set_state('queue_info', None)
+                self.set_state('queue_id', '')
+                self.set_state('page', 'list')
+                st.rerun()
+            else:
+                st.error(f"Failed to delete queue: {resp.error}")
 
     def _page_view(self) -> None:
         info = self.get_state('queue_info')

@@ -220,6 +220,22 @@ class EncryptedStorage:
         """Clear stored credentials."""
         return self.delete("gc_credentials")
 
+    def store_local_user(self, profile: Dict[str, str]) -> bool:
+        """Store local user profile metadata encrypted."""
+        payload = {
+            **profile,
+            "stored_at": datetime.now().isoformat(),
+        }
+        return self.store("local_user_profile", payload)
+
+    def retrieve_local_user(self) -> Optional[Dict[str, str]]:
+        """Retrieve stored local user profile."""
+        return self.retrieve("local_user_profile")
+
+    def clear_local_user(self) -> bool:
+        """Clear stored local user profile."""
+        return self.delete("local_user_profile")
+
     def store_session(self, session_data: Dict) -> bool:
         """Store session state data encrypted."""
         return self.store("session_data", session_data)
