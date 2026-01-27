@@ -2,7 +2,7 @@
 """
 Action History Module
 Stores all operations locally for audit and rollback purposes.
-Supports both local filesystem and cloud (session state) backends.
+Supports both local filesystem and in-memory backends.
 """
 
 import json
@@ -12,7 +12,9 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-import streamlit as st
+
+# Module-level in-memory history store (replaces st.session_state fallback)
+_memory_history: list = []
 
 
 @dataclass
@@ -37,7 +39,7 @@ class ActionHistory:
 
     Backend priority:
     1. Local filesystem (~/.admin_layers/action_history.json)
-    2. Streamlit session state (for cloud/ephemeral environments)
+    2. In-memory store (for cloud/ephemeral environments)
 
     When encrypted storage is available, history is also
     persisted to encrypted storage for cross-session access.
@@ -86,13 +88,14 @@ class ActionHistory:
                 except (json.JSONDecodeError, IOError):
                     pass
 
-        # Fall back to session state
-        return st.session_state.get('_action_history_data', [])
+        # Fall back to in-memory store
+        return list(_memory_history)
 
     def _save_history(self) -> None:
         """Save history to filesystem and session state."""
-        # Always save to session state
-        st.session_state._action_history_data = self._history
+        # Always save to in-memory store
+        global _memory_history
+        _memory_history = list(self._history)
 
         # Also save to filesystem if available
         if self._use_filesystem and self.history_file:
@@ -229,7 +232,7 @@ class ActionHistory:
         """Get info about the current storage backend."""
         if self._use_filesystem:
             return f"filesystem ({self.storage_dir})"
-        return "session state (ephemeral)"
+        return "in-memory (ephemeral)"
 
 
 # Global instance

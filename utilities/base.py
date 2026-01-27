@@ -1,32 +1,25 @@
 """
-Base utility class for Genesys Cloud utilities.
+Base Utility for NiceGUI-based Admin Layers.
+
+Provides the base class and configuration for all utility modules.
+Utilities render into a NiceGUI container using Quasar components
+with native mobile support, clickable tables, and responsive layout.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
-import streamlit as st
+from typing import Any, Callable, Dict, List, Optional
+
+from nicegui import ui
 
 
 @dataclass
 class UtilityConfig:
-    """
-    Configuration for a utility module.
-
-    Attributes:
-        id: Unique identifier for the utility
-        name: Display name
-        description: Short description
-        icon: Emoji or icon
-        category: Category for grouping (e.g., "Users", "Routing", "Analytics")
-        requires_group: Whether utility requires a group selection
-        requires_queue: Whether utility requires a queue selection
-        requires_user: Whether utility requires a user selection
-    """
+    """Configuration for a utility module."""
     id: str
     name: str
     description: str
-    icon: str = "ðŸ”§"
+    icon: str = ""
     category: str = "General"
     requires_group: bool = False
     requires_queue: bool = False
@@ -36,130 +29,97 @@ class UtilityConfig:
 
 class BaseUtility(ABC):
     """
-    Abstract base class for Genesys Cloud utilities.
+    Base class for NiceGUI-based utility modules.
 
-    All utilities should inherit from this class and implement
-    the required methods.
-
-    Example:
-        class MyUtility(BaseUtility):
-            @staticmethod
-            def get_config() -> UtilityConfig:
-                return UtilityConfig(
-                    id="my_utility",
-                    name="My Utility",
-                    description="Does something useful",
-                    icon="ðŸ”§",
-                    category="General"
-                )
-
-            def render_sidebar(self):
-                # Add sidebar controls
-                pass
-
-            def render_main(self):
-                # Render main content
-                pass
+    Each utility owns a content container and re-renders it on navigation.
+    State is stored in a shared dict (app.storage.user).
     """
 
-    def __init__(self, api):
-        """
-        Initialize utility with API client.
-
-        Args:
-            api: GenesysCloudAPI instance
-        """
+    def __init__(self, api: Any, state: Dict, refresh_fn: Callable):
         self.api = api
+        self._state = state
+        self._refresh = refresh_fn
 
     @staticmethod
     @abstractmethod
     def get_config() -> UtilityConfig:
-        """
-        Get utility configuration.
-
-        Returns:
-            UtilityConfig with utility metadata
-        """
         pass
 
     @abstractmethod
     def render_sidebar(self) -> None:
-        """
-        Render sidebar controls for this utility.
-
-        Called when this utility is active to add any
-        utility-specific sidebar elements.
-        """
+        """Build sidebar navigation buttons into the current NiceGUI context."""
         pass
 
     @abstractmethod
     def render_main(self) -> None:
-        """
-        Render main content area for this utility.
-
-        Called when this utility is active to render
-        the primary interface.
-        """
+        """Build main content into the current NiceGUI context."""
         pass
 
     def init_state(self) -> None:
-        """
-        Initialize session state for this utility.
-
-        Override to set up any utility-specific session state.
-        Called once when utility is first loaded.
-        """
         pass
 
     def cleanup(self) -> None:
-        """
-        Clean up when switching away from this utility.
-
-        Override to clean up any resources or state.
-        """
         pass
 
-    # Helper methods for common operations
-
-    def show_error(self, message: str) -> None:
-        """Display error message."""
-        st.error(message)
-
-    def show_success(self, message: str) -> None:
-        """Display success message."""
-        st.success(message)
-
-    def show_info(self, message: str) -> None:
-        """Display info message."""
-        st.info(message)
-
-    def show_warning(self, message: str) -> None:
-        """Display warning message."""
-        st.warning(message)
+    # -- state helpers --
 
     def get_state(self, key: str, default: Any = None) -> Any:
-        """
-        Get utility-specific state value.
-
-        Args:
-            key: State key (will be prefixed with utility id)
-            default: Default value if not set
-
-        Returns:
-            State value
-        """
-        config = self.get_config()
-        full_key = f"{config.id}_{key}"
-        return st.session_state.get(full_key, default)
+        cfg = self.get_config()
+        return self._state.get(f"{cfg.id}_{key}", default)
 
     def set_state(self, key: str, value: Any) -> None:
-        """
-        Set utility-specific state value.
+        cfg = self.get_config()
+        self._state[f"{cfg.id}_{key}"] = value
 
-        Args:
-            key: State key (will be prefixed with utility id)
-            value: Value to store
-        """
-        config = self.get_config()
-        full_key = f"{config.id}_{key}"
-        st.session_state[full_key] = value
+    def navigate(self, page: str) -> None:
+        """Change the current page and trigger a re-render."""
+        self.set_state('page', page)
+        self._refresh()
+
+    # -- reusable UI helpers --
+
+    def nav_button(self, label: str, page: str, icon: Optional[str] = None) -> None:
+        current = self.get_state('page', 'list')
+        color = 'primary' if current == page else None
+        flat = current != page
+        ui.button(
+            label, icon=icon,
+            on_click=lambda p=page: self.navigate(p),
+            color=color,
+        ).props(f'{"flat " if flat else ""}dense align=left no-caps').classes('w-full')
+
+    def back_button(self, label: str = 'Back to list', page: str = 'list') -> None:
+        ui.button(label, icon='arrow_back',
+                  on_click=lambda: self.navigate(page),
+                  ).props('flat dense no-caps')
+
+    def section_title(self, text: str, subtitle: str = '') -> None:
+        ui.label(text).classes('text-h5 q-mb-sm')
+        if subtitle:
+            ui.label(subtitle).classes('text-caption text-grey-6')
+
+    def info_row(self, label: str, value: str) -> None:
+        with ui.row().classes('items-center q-gutter-sm'):
+            ui.label(label).classes('text-caption text-grey-6 text-uppercase')
+            ui.label(value or '\u2014').classes('text-body2')
+
+    def make_table(self, columns: List[Dict], rows: List[Dict],
+                   row_key: str = 'id', on_row_click: Optional[Callable] = None,
+                   pagination: int = 25, title: str = '') -> ui.table:
+        """Create a Quasar table with search, pagination, and optional row click."""
+        table = ui.table(
+            columns=columns, rows=rows, row_key=row_key,
+            pagination={'rowsPerPage': pagination, 'sortBy': columns[0]['name'] if columns else None},
+            title=title,
+        ).classes('w-full')
+        table.props('flat bordered dense wrap-cells')
+        table.add_slot('top-right', '''
+            <q-input borderless dense debounce="300" v-model="props.filter" placeholder="Search...">
+                <template v-slot:append><q-icon name="search" /></template>
+            </q-input>
+        ''')
+        table.props('filter=""')
+        if on_row_click:
+            table.on('rowClick', lambda e: on_row_click(e.args[1]))
+            table.classes('cursor-pointer')
+        return table

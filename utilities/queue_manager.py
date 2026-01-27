@@ -1,11 +1,13 @@
 """
 Queue Manager Utility
 View and manage queue membership in Genesys Cloud.
+NiceGUI/Quasar implementation with clickable tables.
 """
 
-import streamlit as st
-import pandas as pd
-from typing import List, Dict, Optional
+import json
+from typing import Dict, List, Optional
+
+from nicegui import ui
 
 from .base import BaseUtility, UtilityConfig
 
@@ -18,43 +20,36 @@ class QueueManagerUtility(BaseUtility):
             id="queue_manager",
             name="Queue Manager",
             description="View and manage queue membership and configuration",
-            icon="\U0001F4DE",
+            icon="phone_in_talk",
             category="Routing",
             requires_queue=True,
-            tags=["queues", "routing", "membership", "agents"]
+            tags=["queues", "routing", "membership", "agents"],
         )
 
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('queue_id', ''),
                              ('queue_info', None), ('members', []),
-                             ('all_queues', None),
                              ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
     def render_sidebar(self) -> None:
-        st.markdown("#### Queue Manager")
         queue_info = self.get_state('queue_info')
         if queue_info:
-            st.caption(f"Selected: **{queue_info.get('name', '')}**")
-        pages = [
-            ("qm_nav_list", "\U0001F4CB All Queues", "list"),
-            ("qm_nav_create", "\U00002795 Create Queue", "create"),
-        ]
+            ui.label(f"Selected: {queue_info.get('name', '')}").classes(
+                'text-caption text-grey-6 q-px-md')
+
+        self.nav_button('All Queues', 'list', icon='list')
+        self.nav_button('Create Queue', 'create', icon='add')
+
         if queue_info:
-            pages += [
-                ("qm_nav_view", "\U0001F465 Members", "view"),
-                ("qm_nav_add", "\U00002795 Add Members", "add"),
-                ("qm_nav_remove", "\U00002796 Remove Members", "remove"),
-                ("qm_nav_config", "\U00002699\uFE0F Config", "config"),
-                ("qm_nav_edit", "\U0000270F\ufe0f Edit Queue", "edit"),
-                ("qm_nav_delete", "\U0001F5D1\ufe0f Delete Queue", "delete"),
-                ("qm_nav_export", "\U0001F4E5 Export", "export"),
-            ]
-        for key, label, page in pages:
-            if st.button(label, use_container_width=True, key=key):
-                self.set_state('page', page)
-                st.rerun()
+            self.nav_button('Members', 'view', icon='group')
+            self.nav_button('Add Members', 'add', icon='person_add')
+            self.nav_button('Remove Members', 'remove', icon='person_remove')
+            self.nav_button('Config', 'config', icon='settings')
+            self.nav_button('Edit Queue', 'edit', icon='edit')
+            self.nav_button('Delete Queue', 'delete', icon='delete')
+            self.nav_button('Export', 'export', icon='download')
 
     def render_main(self) -> None:
         self.init_state()
@@ -63,7 +58,8 @@ class QueueManagerUtility(BaseUtility):
             'list': self._page_list, 'view': self._page_view,
             'add': self._page_add, 'remove': self._page_remove,
             'config': self._page_config, 'export': self._page_export,
-            'create': self._page_create, 'edit': self._page_edit, 'delete': self._page_delete,
+            'create': self._page_create, 'edit': self._page_edit,
+            'delete': self._page_delete,
         }.get(page, self._page_list)()
 
     # -- helpers --
@@ -77,45 +73,19 @@ class QueueManagerUtility(BaseUtility):
             self.set_state('queue_info', resp.data)
             self.set_state('members', self.api.queues.get_members(queue_id))
             self.set_state('page', 'view')
+            self._refresh()
         else:
-            st.error(f"Failed to load queue: {resp.error}")
+            ui.notify(f'Failed to load queue: {resp.error}', type='negative')
 
     def _refresh_members(self) -> None:
         qid = self.get_state('queue_id')
         if qid:
             self.set_state('members', self.api.queues.get_members(qid))
 
-    def _action_bar(self) -> None:
-        info = self.get_state('queue_info')
-        if not info:
-            return
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        if c1.button("+ Add", use_container_width=True, key="qm_ab_add"):
-            self.set_state('page', 'add')
-            st.rerun()
-        if c2.button("- Remove", use_container_width=True, key="qm_ab_rm"):
-            self.set_state('page', 'remove')
-            st.rerun()
-        if c3.button("Config", use_container_width=True, key="qm_ab_cfg"):
-            self.set_state('page', 'config')
-            st.rerun()
-        if c4.button("Export", use_container_width=True, key="qm_ab_exp"):
-            self.set_state('page', 'export')
-            st.rerun()
-        if c5.button("Edit", use_container_width=True, key="qm_ab_edit"):
-            self.set_state('page', 'edit')
-            st.rerun()
-        if c6.button("Refresh", use_container_width=True, key="qm_ab_ref"):
-            self._refresh_members()
-            st.rerun()
-
     def _queue_header(self) -> None:
         info = self.get_state('queue_info')
         members = self.get_state('members', [])
-        if st.button("< Back to Queues", key="qm_back"):
-            self.set_state('page', 'list')
-            st.rerun()
-        st.markdown(f"### {info.get('name', 'Queue')}")
+        self.back_button('Back to Queues')
 
         acw = info.get('acwSettings', {})
         acw_timeout = acw.get('timeoutMs')
@@ -125,40 +95,41 @@ class QueueManagerUtility(BaseUtility):
         alert = call_settings.get('alertingTimeoutSeconds')
         alert_str = f"{alert}s" if alert else "N/A"
 
-        meta = (f"**{len(members)}** members · "
-                f"Skill eval: {info.get('skillEvaluationMethod', 'N/A')} · "
-                f"ACW: {acw_str} · Alert: {alert_str}")
-        st.markdown(meta)
+        self.section_title(
+            info.get('name', 'Queue'),
+            f"{len(members)} members | Skill eval: {info.get('skillEvaluationMethod', 'N/A')} | ACW: {acw_str} | Alert: {alert_str}"
+        )
+        desc = info.get('description', '')
+        if desc:
+            ui.label(desc).classes('text-caption text-grey-6')
 
-        if info.get('description'):
-            st.caption(info['description'])
-        self._action_bar()
-        st.markdown("---")
+        with ui.row().classes('q-gutter-sm q-my-sm'):
+            ui.button('Add', icon='person_add',
+                      on_click=lambda: self.navigate('add')).props('flat dense no-caps')
+            ui.button('Remove', icon='person_remove',
+                      on_click=lambda: self.navigate('remove')).props('flat dense no-caps')
+            ui.button('Config', icon='settings',
+                      on_click=lambda: self.navigate('config')).props('flat dense no-caps')
+            ui.button('Export', icon='download',
+                      on_click=lambda: self.navigate('export')).props('flat dense no-caps')
+            ui.button('Edit', icon='edit',
+                      on_click=lambda: self.navigate('edit')).props('flat dense no-caps')
+            ui.button('Refresh', icon='refresh', on_click=lambda: (
+                self._refresh_members(), self._refresh()
+            )).props('flat dense no-caps')
+        ui.separator()
 
     # -- pages --
 
     def _page_list(self) -> None:
-        st.markdown("## Queues")
+        self.section_title('Queues')
+
         page_size = self.get_state('list_page_size', 25)
         page_number = self.get_state('list_page_number', 1)
 
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            page_size = st.selectbox(
-                "Rows per page",
-                [25, 50, 100],
-                index=[25, 50, 100].index(page_size),
-                key="qm_page_size",
-            )
-            self.set_state('list_page_size', page_size)
-        with c2:
-            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="qm_page_num"))
-            self.set_state('list_page_number', page_number)
-
-        with st.spinner("Loading queues..."):
-            resp = self.api.queues.list_page(page_size=page_size, page_number=page_number)
+        resp = self.api.queues.list_page(page_size=page_size, page_number=page_number)
         if not resp.success:
-            st.error(f"Failed to load queues: {resp.error}")
+            ui.notify(f'Failed to load queues: {resp.error}', type='negative')
             return
 
         data = resp.data or {}
@@ -166,403 +137,398 @@ class QueueManagerUtility(BaseUtility):
         total = data.get('total', len(all_queues))
         page_count = data.get('pageCount', 1)
 
-        if page_number > page_count:
-            self.set_state('list_page_number', page_count)
-            st.rerun()
-
         if not all_queues:
-            st.info("No queues found in your org.")
+            ui.label('No queues found in your org.').classes('text-grey-6')
             return
 
-        search = st.text_input("Search", placeholder="Filter by name...",
-                               key="qm_list_search", label_visibility="collapsed")
+        ui.label(f'Showing {len(all_queues)} of {total} queues (Page {page_number} of {page_count})').classes(
+            'text-caption text-grey-6')
 
-        df = pd.DataFrame([{
-            'Name': q.get('name', ''),
-            'Members': q.get('memberCount', 0),
-            'Skill Eval': q.get('skillEvaluationMethod', ''),
-            'ID': q.get('id', ''),
-        } for q in all_queues])
+        columns = [
+            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
+            {'name': 'members', 'label': 'Members', 'field': 'members', 'sortable': True},
+            {'name': 'skill_eval', 'label': 'Skill Eval', 'field': 'skill_eval', 'sortable': True},
+        ]
+        rows = [{
+            'id': q.get('id', ''),
+            'name': q.get('name', ''),
+            'members': q.get('memberCount', 0),
+            'skill_eval': q.get('skillEvaluationMethod', ''),
+        } for q in all_queues]
 
-        if search and not df.empty:
-            df = df[df['Name'].str.contains(search, case=False, na=False)]
+        self.make_table(
+            columns, rows,
+            on_row_click=lambda row: self._load_queue(row['id']),
+            title='Click a row to open',
+        )
 
-        st.caption(f"Showing {len(df)} of {total} queues (Page {page_number} of {page_count})")
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+        with ui.row().classes('q-gutter-sm q-mt-md items-center'):
+            ui.button('Prev', icon='chevron_left',
+                      on_click=lambda: self._change_page(page_number - 1)).props(
+                'flat dense no-caps').set_enabled(page_number > 1)
+            ui.label(f'Page {page_number} of {page_count}').classes('text-body2')
+            ui.button('Next', icon='chevron_right',
+                      on_click=lambda: self._change_page(page_number + 1)).props(
+                'flat dense no-caps').set_enabled(page_number < page_count)
 
-        st.markdown("---")
-        st.markdown("##### Open a queue")
-        filtered = all_queues
-        if search:
-            sl = search.lower()
-            filtered = [q for q in all_queues if sl in q.get('name', '').lower()]
-        options = {f"{q.get('name', '?')} ({q.get('memberCount', '?')} members)": q.get('id') for q in filtered}
-        if options:
-            chosen = st.selectbox("Select queue", list(options.keys()), key="qm_list_pick",
-                                  label_visibility="collapsed")
-            if st.button("Open", type="primary", key="qm_list_open"):
-                with st.spinner("Loading..."):
-                    self._load_queue(options[chosen])
-                    st.rerun()
+    def _change_page(self, page: int) -> None:
+        self.set_state('list_page_number', page)
+        self._refresh()
 
     def _page_create(self) -> None:
-        st.markdown("## Create Queue")
-        st.warning("Creating a queue affects routing. Confirm before creating.")
+        self.section_title('Create Queue')
+        ui.label('Creating a queue affects routing. Confirm before creating.').classes(
+            'text-caption text-amber')
 
-        with st.form("qm_create_form"):
-            name = st.text_input("Name", placeholder="Queue name")
-            description = st.text_area("Description", placeholder="Queue description")
-            skill_eval = st.selectbox("Skill Evaluation", ["BEST", "ALL"], index=0)
-            calling_party_name = st.text_input("Calling Party Name", placeholder="Outbound display name")
-            calling_party_number = st.text_input("Calling Party Number", placeholder="+18005551234")
-            acw_timeout = st.number_input("ACW Timeout (seconds)", min_value=0, value=60, step=5)
-            alert_timeout = st.number_input("Alert Timeout (seconds)", min_value=0, value=30, step=5)
-            confirm = st.checkbox("I confirm I want to create this queue")
-            submitted = st.form_submit_button("Create Queue", use_container_width=True)
+        name = ui.input('Name', placeholder='Queue name').classes('w-full')
+        description = ui.textarea('Description', placeholder='Queue description').classes('w-full')
+        skill_eval = ui.select(['BEST', 'ALL'], value='BEST', label='Skill Evaluation').classes('w-full')
+        calling_party_name = ui.input('Calling Party Name', placeholder='Outbound display name').classes('w-full')
+        calling_party_number = ui.input('Calling Party Number', placeholder='+18005551234').classes('w-full')
+        acw_timeout = ui.number('ACW Timeout (seconds)', value=60, min=0, step=5).classes('w-full')
+        alert_timeout = ui.number('Alert Timeout (seconds)', value=30, min=0, step=5).classes('w-full')
+        confirm = ui.checkbox('I confirm I want to create this queue')
 
-        if submitted:
-            if not confirm:
-                st.error("Confirmation required before creating a queue.")
+        def do_create():
+            if not confirm.value:
+                ui.notify('Confirmation required', type='warning')
                 return
-            if not name:
-                st.error("Queue name is required.")
+            if not name.value:
+                ui.notify('Queue name is required', type='warning')
                 return
             payload = {
-                "name": name,
-                "description": description,
-                "skillEvaluationMethod": skill_eval,
-                "callingPartyName": calling_party_name,
-                "callingPartyNumber": calling_party_number,
-                "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": int(acw_timeout * 1000)},
-                "mediaSettings": {"call": {"alertingTimeoutSeconds": int(alert_timeout)}},
+                'name': name.value,
+                'description': description.value,
+                'skillEvaluationMethod': skill_eval.value,
+                'callingPartyName': calling_party_name.value,
+                'callingPartyNumber': calling_party_number.value,
+                'acwSettings': {'wrapupPrompt': 'MANDATORY', 'timeoutMs': int((acw_timeout.value or 0) * 1000)},
+                'mediaSettings': {'call': {'alertingTimeoutSeconds': int(alert_timeout.value or 0)}},
             }
             resp = self.api.queues.create(payload)
             if resp.success:
-                st.success("Queue created.")
+                ui.notify('Queue created', type='positive')
                 self.set_state('queue_id', resp.data.get('id'))
                 self.set_state('queue_info', resp.data)
-                self.set_state('page', 'view')
-                st.rerun()
+                self.navigate('view')
             else:
-                st.error(f"Failed to create queue: {resp.error}")
+                ui.notify(f'Failed: {resp.error}', type='negative')
+
+        ui.button('Create Queue', icon='add', on_click=do_create).props(
+            'color=primary no-caps').classes('q-mt-md')
 
     def _page_edit(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Edit Queue")
+        self.section_title('Edit Queue')
 
         acw = info.get('acwSettings', {}) or {}
         media = info.get('mediaSettings', {}) or {}
         call_settings = media.get('call', {}) if isinstance(media, dict) else {}
 
-        with st.form("qm_edit_form"):
-            name = st.text_input("Name", value=info.get('name', ''))
-            description = st.text_area("Description", value=info.get('description', ''))
-            skill_eval = st.selectbox(
-                "Skill Evaluation",
-                ["BEST", "ALL"],
-                index=0 if info.get("skillEvaluationMethod", "BEST") == "BEST" else 1,
-            )
-            calling_party_name = st.text_input("Calling Party Name", value=info.get('callingPartyName', ''))
-            calling_party_number = st.text_input("Calling Party Number", value=info.get('callingPartyNumber', ''))
-            acw_timeout = st.number_input(
-                "ACW Timeout (seconds)",
-                min_value=0,
-                value=int((acw.get("timeoutMs") or 60000) / 1000),
-                step=5,
-            )
-            alert_timeout = st.number_input(
-                "Alert Timeout (seconds)",
-                min_value=0,
-                value=int(call_settings.get("alertingTimeoutSeconds") or 30),
-                step=5,
-            )
-            submitted = st.form_submit_button("Save Changes", use_container_width=True)
+        name = ui.input('Name', value=info.get('name', '')).classes('w-full')
+        description = ui.textarea('Description', value=info.get('description', '')).classes('w-full')
+        skill_eval = ui.select(
+            ['BEST', 'ALL'],
+            value=info.get('skillEvaluationMethod', 'BEST'),
+            label='Skill Evaluation',
+        ).classes('w-full')
+        calling_party_name = ui.input('Calling Party Name',
+                                       value=info.get('callingPartyName', '')).classes('w-full')
+        calling_party_number = ui.input('Calling Party Number',
+                                         value=info.get('callingPartyNumber', '')).classes('w-full')
+        acw_timeout = ui.number('ACW Timeout (seconds)',
+                                 value=int((acw.get('timeoutMs') or 60000) / 1000),
+                                 min=0, step=5).classes('w-full')
+        alert_timeout = ui.number('Alert Timeout (seconds)',
+                                   value=int(call_settings.get('alertingTimeoutSeconds') or 30),
+                                   min=0, step=5).classes('w-full')
 
-        if submitted:
+        def do_save():
             payload = {
-                "name": name,
-                "description": description,
-                "skillEvaluationMethod": skill_eval,
-                "callingPartyName": calling_party_name,
-                "callingPartyNumber": calling_party_number,
-                "acwSettings": {"wrapupPrompt": acw.get("wrapupPrompt", "MANDATORY"),
-                                 "timeoutMs": int(acw_timeout * 1000)},
-                "mediaSettings": {"call": {"alertingTimeoutSeconds": int(alert_timeout)}},
+                'name': name.value,
+                'description': description.value,
+                'skillEvaluationMethod': skill_eval.value,
+                'callingPartyName': calling_party_name.value,
+                'callingPartyNumber': calling_party_number.value,
+                'acwSettings': {
+                    'wrapupPrompt': acw.get('wrapupPrompt', 'MANDATORY'),
+                    'timeoutMs': int((acw_timeout.value or 0) * 1000),
+                },
+                'mediaSettings': {'call': {'alertingTimeoutSeconds': int(alert_timeout.value or 0)}},
             }
             resp = self.api.queues.update(info.get('id'), payload)
             if resp.success:
-                st.success("Queue updated.")
+                ui.notify('Queue updated', type='positive')
                 self._load_queue(info.get('id'))
-                st.rerun()
             else:
-                st.error(f"Failed to update queue: {resp.error}")
+                ui.notify(f'Failed: {resp.error}', type='negative')
+
+        ui.button('Save Changes', icon='save', on_click=do_save).props(
+            'color=primary no-caps').classes('q-mt-md')
 
     def _page_delete(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Delete Queue")
-        st.warning("Deleting a queue is permanent. This action requires confirmation.")
-        confirm = st.checkbox("I understand this will delete the queue", key="qm_delete_confirm")
-        if st.button("Delete Queue", type="primary", disabled=not confirm, key="qm_delete_btn"):
+        self.section_title('Delete Queue')
+        ui.label('Deleting a queue is permanent.').classes('text-caption text-amber')
+        confirm = ui.checkbox('I understand this will delete the queue')
+
+        def do_delete():
+            if not confirm.value:
+                ui.notify('Confirmation required', type='warning')
+                return
             resp = self.api.queues.delete(info.get('id'))
             if resp.success:
-                st.success("Queue deleted.")
+                ui.notify('Queue deleted', type='positive')
                 self.set_state('queue_info', None)
                 self.set_state('queue_id', '')
-                self.set_state('page', 'list')
-                st.rerun()
+                self.navigate('list')
             else:
-                st.error(f"Failed to delete queue: {resp.error}")
+                ui.notify(f'Failed: {resp.error}', type='negative')
+
+        ui.button('Delete Queue', icon='delete', on_click=do_delete).props(
+            'color=red no-caps').classes('q-mt-md')
 
     def _page_view(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
 
         members = self.get_state('members', [])
-        search = st.text_input("Filter members", placeholder="Name or email...", key="qm_view_filter")
-
         if not members:
-            st.info("This queue has no members.")
+            ui.label('This queue has no members.').classes('text-grey-6')
             return
 
-        df = pd.DataFrame([{
-            'Name': m.get('name', m.get('user', {}).get('name', '')),
-            'Email': m.get('email', m.get('user', {}).get('email', '')),
-            'Joined': str(m.get('joined', '')),
-            'ID': m.get('id', m.get('user', {}).get('id', '')),
-        } for m in members])
+        columns = [
+            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
+            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
+            {'name': 'joined', 'label': 'Joined', 'field': 'joined', 'sortable': True},
+        ]
+        rows = [{
+            'id': m.get('id', m.get('user', {}).get('id', '')),
+            'name': m.get('name', m.get('user', {}).get('name', '')),
+            'email': m.get('email', m.get('user', {}).get('email', '')),
+            'joined': str(m.get('joined', '')),
+        } for m in members]
 
-        if search and not df.empty:
-            mask = (df['Name'].str.contains(search, case=False, na=False) |
-                    df['Email'].str.contains(search, case=False, na=False))
-            df = df[mask]
-
-        st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
+        self.make_table(columns, rows, title=f'{len(members)} members')
 
     def _page_add(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Add Members")
+        self.section_title('Add Members')
 
-        tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
-        emails_text = ""
-        with tab1:
-            emails_text = st.text_area(
-                "Emails (one per line)", height=180,
-                placeholder="agent1@company.com\nagent2@company.com", key="qm_paste"
-            )
-        with tab2:
-            uploaded = st.file_uploader("CSV or TXT file", type=['csv', 'txt'], key="qm_upload")
-            if uploaded:
-                content = uploaded.read().decode('utf-8')
-                emails_text = "\n".join(
-                    line.split(',')[0].strip().strip('"')
-                    for line in content.split('\n') if '@' in line
-                )
-                st.code(emails_text, language=None)
+        emails_input = ui.textarea(
+            'Emails (one per line)',
+            placeholder='agent1@company.com\nagent2@company.com',
+        ).classes('w-full').style('min-height:150px')
 
-        c1, c2 = st.columns(2)
-        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="qm_dryrun")
-        run = c2.button("Process", type="primary", use_container_width=True, key="qm_run_add")
+        dry_run = ui.checkbox('Preview only (dry run)', value=True)
 
-        if run and emails_text:
-            self._execute_add(emails_text, dry_run)
+        def do_process():
+            self._execute_add(emails_input.value or '', dry_run.value)
+
+        ui.button('Process', icon='play_arrow', on_click=do_process).props(
+            'color=primary no-caps').classes('q-mt-sm')
 
     def _execute_add(self, raw: str, dry_run: bool) -> None:
         emails = list(dict.fromkeys(
             e.strip() for e in raw.split('\n') if e.strip() and '@' in e
         ))
         if not emails:
-            st.error("No valid email addresses found.")
+            ui.notify('No valid email addresses found', type='warning')
             return
 
-        st.markdown("---")
-        progress = st.progress(0)
         found, missing = [], []
-        for i, email in enumerate(emails):
-            progress.progress((i + 1) / len(emails))
+        for email in emails:
             user = self.api.users.search_by_email(email)
             if user:
                 found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
             else:
                 missing.append(email)
-        progress.empty()
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.success(f"**{len(found)}** users found")
-            if found:
-                st.dataframe(pd.DataFrame(found)[['name', 'email']],
-                             hide_index=True, use_container_width=True)
-        with c2:
-            if missing:
-                st.error(f"**{len(missing)}** not found")
+        ui.notify(f'{len(found)} found, {len(missing)} not found', type='info')
+
+        if found:
+            columns = [
+                {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
+                {'name': 'email', 'label': 'Email', 'field': 'email', 'align': 'left'},
+            ]
+            self.make_table(columns, found, title=f'{len(found)} users found')
+
+        if missing:
+            with ui.column().classes('q-mt-sm'):
+                ui.label(f'{len(missing)} not found:').classes('text-caption text-red')
                 for e in missing:
-                    st.caption(f"- {e}")
+                    ui.label(f'  {e}').classes('text-caption text-grey-6')
 
         if not found:
             return
         if dry_run:
-            st.info(f"Dry run complete. {len(found)} users would be added. Uncheck 'Preview only' to execute.")
+            ui.notify(f'Dry run: {len(found)} users would be added', type='info')
             return
 
         resp = self.api.queues.add_members(self.get_state('queue_id'), [u['id'] for u in found])
         if resp.success:
-            st.success(f"Added {len(found)} members to queue.")
+            ui.notify(f'Added {len(found)} members', type='positive')
             self._refresh_members()
         else:
-            st.error(f"Failed: {resp.error}")
+            ui.notify(f'Failed: {resp.error}', type='negative')
 
     def _page_remove(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Remove Members")
+        self.section_title('Remove Members')
 
         members = self.get_state('members', [])
         if not members:
-            st.info("No members to remove.")
+            ui.label('No members to remove.').classes('text-grey-6')
             return
 
-        search = st.text_input("Filter", placeholder="Search...", key="qm_rm_filter")
-        filtered = members
-        if search:
-            sl = search.lower()
-            filtered = [m for m in members if
-                        sl in m.get('name', m.get('user', {}).get('name', '')).lower() or
-                        sl in m.get('email', m.get('user', {}).get('email', '')).lower()]
+        columns = [
+            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
+            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
+        ]
+        rows = [{
+            'id': m.get('id', m.get('user', {}).get('id', '')),
+            'name': m.get('name', m.get('user', {}).get('name', '')),
+            'email': m.get('email', m.get('user', {}).get('email', '')),
+        } for m in members]
 
-        def _label(m):
-            name = m.get('name', m.get('user', {}).get('name', '?'))
-            email = m.get('email', m.get('user', {}).get('email', '?'))
-            return f"{name} ({email})"
+        table = ui.table(
+            columns=columns, rows=rows, row_key='id',
+            selection='multiple',
+            pagination={'rowsPerPage': 25},
+            title='Select members to remove',
+        ).classes('w-full')
+        table.props('flat bordered dense')
+        table.add_slot('top-right', '''
+            <q-input borderless dense debounce="300" v-model="props.filter" placeholder="Search...">
+                <template v-slot:append><q-icon name="search" /></template>
+            </q-input>
+        ''')
+        table.props('filter=""')
 
-        def _id(m):
-            return m.get('id', m.get('user', {}).get('id', ''))
+        confirm = ui.checkbox('I confirm this removal')
 
-        options = {_label(m): _id(m) for m in filtered}
-        selected = st.multiselect("Select members to remove", list(options.keys()), key="qm_rm_sel")
+        def do_remove():
+            if not confirm.value:
+                ui.notify('Confirmation required', type='warning')
+                return
+            selected = table.selected
+            if not selected:
+                ui.notify('No members selected', type='warning')
+                return
+            ids = [s['id'] for s in selected]
+            resp = self.api.queues.remove_members(self.get_state('queue_id'), ids)
+            if resp.success:
+                ui.notify(f'Removed {len(ids)} agents from queue', type='positive')
+                self._refresh_members()
+                self._refresh()
+            else:
+                ui.notify(f'Failed: {resp.error}', type='negative')
 
-        if selected:
-            st.warning(f"{len(selected)} agent(s) will be removed from queue.")
-            confirm = st.checkbox("I confirm this removal", key="qm_rm_confirm")
-            if st.button("Remove Selected", type="primary", disabled=not confirm, key="qm_rm_btn"):
-                ids = [options[s] for s in selected]
-                resp = self.api.queues.remove_members(self.get_state('queue_id'), ids)
-                if resp.success:
-                    st.success(f"Removed {len(selected)} members from queue.")
-                    self._refresh_members()
-                    st.rerun()
-                else:
-                    st.error(f"Failed: {resp.error}")
+        ui.button('Remove Selected', icon='delete', on_click=do_remove).props(
+            'color=red no-caps').classes('q-mt-sm')
 
     def _page_config(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Configuration")
+        self.section_title('Configuration')
 
         # General
-        st.markdown("#### General")
-        rows = [
-            ("ID", info.get('id', '')),
-            ("Name", info.get('name', '')),
-            ("Description", info.get('description', '')),
-            ("Skill Evaluation", info.get('skillEvaluationMethod', '')),
-            ("Calling Party Name", info.get('callingPartyName', '')),
-            ("Calling Party Number", info.get('callingPartyNumber', '')),
-        ]
-        for label, value in rows:
-            c1, c2 = st.columns([1, 3])
-            c1.markdown(f"**{label}**")
-            c2.markdown(value or "\u2014")
+        ui.label('General').classes('text-h6 q-mt-md')
+        for label, value in [
+            ('ID', info.get('id', '')),
+            ('Name', info.get('name', '')),
+            ('Description', info.get('description', '')),
+            ('Skill Evaluation', info.get('skillEvaluationMethod', '')),
+            ('Calling Party Name', info.get('callingPartyName', '')),
+            ('Calling Party Number', info.get('callingPartyNumber', '')),
+        ]:
+            self.info_row(label, value or '\u2014')
 
         # ACW Settings
         acw = info.get('acwSettings', {})
         if acw:
-            st.markdown("#### After Call Work")
-            c1, c2 = st.columns([1, 3])
-            c1.markdown("**Wrapup Prompt**")
-            c2.markdown(acw.get('wrapupPrompt', '\u2014'))
-            c1, c2 = st.columns([1, 3])
-            c1.markdown("**Timeout**")
+            ui.label('After Call Work').classes('text-h6 q-mt-md')
+            self.info_row('Wrapup Prompt', acw.get('wrapupPrompt', '\u2014'))
             timeout = acw.get('timeoutMs')
-            c2.markdown(f"{timeout // 1000} seconds" if timeout else "\u2014")
+            self.info_row('Timeout', f"{timeout // 1000} seconds" if timeout else '\u2014')
 
         # Media Settings
         media = info.get('mediaSettings', {})
         if media:
-            st.markdown("#### Media Settings")
+            ui.label('Media Settings').classes('text-h6 q-mt-md')
             for media_type, settings in media.items():
                 if isinstance(settings, dict):
                     alert = settings.get('alertingTimeoutSeconds')
                     if alert:
-                        c1, c2 = st.columns([1, 3])
-                        c1.markdown(f"**{media_type.title()} Alert**")
-                        c2.markdown(f"{alert} seconds")
+                        self.info_row(f'{media_type.title()} Alert', f'{alert} seconds')
 
         # Queue Flow
         qf = info.get('queueFlow')
         if qf:
-            st.markdown("#### Queue Flow")
-            c1, c2 = st.columns([1, 3])
-            c1.markdown("**Flow**")
-            c2.markdown(qf.get('name', qf.get('id', '\u2014')))
+            ui.label('Queue Flow').classes('text-h6 q-mt-md')
+            self.info_row('Flow', qf.get('name', qf.get('id', '\u2014')))
 
-        with st.expander("Raw JSON"):
-            st.json(info)
+        # Raw JSON
+        with ui.expansion('Raw JSON').classes('q-mt-md'):
+            ui.code(json.dumps(info, indent=2, default=str)).classes('w-full')
 
     def _page_export(self) -> None:
         info = self.get_state('queue_info')
         if not info:
-            self.set_state('page', 'list')
-            st.rerun()
+            self.navigate('list')
             return
         self._queue_header()
-        st.markdown("### Export")
+        self.section_title('Export')
 
         members = self.get_state('members', [])
+        columns = [
+            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
+            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
+            {'name': 'id', 'label': 'ID', 'field': 'id', 'align': 'left'},
+        ]
+        rows = [{
+            'id': m.get('id', m.get('user', {}).get('id', '')),
+            'name': m.get('name', m.get('user', {}).get('name', '')),
+            'email': m.get('email', m.get('user', {}).get('email', '')),
+        } for m in members]
+
         name = info.get('name', 'queue')
 
-        df = pd.DataFrame([{
-            'Name': m.get('name', m.get('user', {}).get('name', '')),
-            'Email': m.get('email', m.get('user', {}).get('email', '')),
-            'ID': m.get('id', m.get('user', {}).get('id', '')),
-        } for m in members])
+        csv_lines = ['Name,Email,ID']
+        for r in rows:
+            csv_lines.append(f"{r['name']},{r['email']},{r['id']}")
+        csv_data = '\n'.join(csv_lines)
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.download_button("Download CSV", data=df.to_csv(index=False),
-                               file_name=f"{name}_members.csv", mime="text/csv",
-                               use_container_width=True, key="qm_dl_csv")
-        with c2:
-            emails = "\n".join(df['Email'].dropna().tolist())
-            st.download_button("Download Emails", data=emails,
-                               file_name=f"{name}_emails.txt", mime="text/plain",
-                               use_container_width=True, key="qm_dl_email")
+        emails_data = '\n'.join(r['email'] for r in rows if r['email'])
 
-        st.markdown("### Preview")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        with ui.row().classes('q-gutter-sm q-mb-md'):
+            ui.button('Download CSV', icon='download',
+                      on_click=lambda: ui.download(csv_data.encode(),
+                                                    f'{name}_members.csv')).props('no-caps')
+            ui.button('Download Emails', icon='email',
+                      on_click=lambda: ui.download(emails_data.encode(),
+                                                    f'{name}_emails.txt')).props('no-caps outline')
+
+        self.make_table(columns, rows, title=f'{len(rows)} members')

@@ -56,8 +56,7 @@ def load_config(
 
     Priority:
     1. Environment variables ({env_prefix}_CLIENT_ID, {env_prefix}_CLIENT_SECRET, {env_prefix}_REGION)
-    2. Streamlit secrets (st.secrets["genesys"])
-    3. Config file (JSON with client_id, client_secret, region)
+    2. Config file (JSON with client_id, client_secret, region)
 
     Args:
         config_path: Path to JSON config file
@@ -78,23 +77,6 @@ def load_config(
             region=region,
             source='environment'
         )
-
-    # Try Streamlit secrets (for Community Cloud deployment)
-    try:
-        import streamlit as st
-        genesys_secrets = st.secrets.get("genesys", {})
-        if genesys_secrets:
-            s_client_id = genesys_secrets.get("client_id")
-            s_client_secret = genesys_secrets.get("client_secret")
-            if s_client_id and s_client_secret:
-                return GenesysConfig(
-                    client_id=s_client_id,
-                    client_secret=s_client_secret,
-                    region=genesys_secrets.get("region", "mypurecloud.com"),
-                    source='streamlit_secrets'
-                )
-    except (ImportError, FileNotFoundError, KeyError, AttributeError):
-        pass
 
     # Fall back to config file
     try:
