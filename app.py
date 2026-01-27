@@ -48,6 +48,11 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    :root {
+        --mobile-padding: 0.75rem;
+        --sidebar-width: 17rem;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
@@ -117,6 +122,71 @@ st.markdown("""
         font-size: 0.75rem;
         color: #8899aa;
         padding: 4px 0;
+    }
+
+    /* Mobile-first layout refinements */
+    .block-container {
+        padding-top: 1rem;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+        padding-bottom: 2rem;
+    }
+
+    [data-testid="stSidebar"] {
+        min-width: var(--sidebar-width);
+        max-width: var(--sidebar-width);
+        overflow: hidden;
+    }
+
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 0.75rem;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    [data-testid="stSidebar"] button {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    [data-testid="stSidebar"] .stButton + .stButton {
+        margin-top: 0.25rem;
+    }
+
+    [data-testid="stSidebar"] .nav-header {
+        margin: 0.75rem 0 0.35rem 0;
+    }
+
+    [data-testid="collapsedControl"] {
+        font-size: 0 !important;
+    }
+
+    [data-testid="collapsedControl"]::before {
+        content: "☰";
+        font-size: 1.1rem;
+        color: #e2e8f0;
+    }
+
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: var(--mobile-padding);
+            padding-right: var(--mobile-padding);
+        }
+
+        [data-testid="stSidebar"] {
+            min-width: 100%;
+            max-width: 100%;
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding-left: var(--mobile-padding);
+            padding-right: var(--mobile-padding);
+        }
+
+        [data-testid="stSidebar"] button {
+            padding: 0.35rem 0.5rem;
+            font-size: 0.8rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
