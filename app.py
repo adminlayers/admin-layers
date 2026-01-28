@@ -37,7 +37,7 @@ from utilities import (
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
@@ -73,11 +73,74 @@ st.markdown(
     footer {visibility: hidden;}
 
     /* ---------------------------------------------------------------
-       Sidebar toggle (collapsed-control / hamburger)
-       Streamlit renders Material Symbols icon names as literal text
-       ("double_arrow_right") when the web font hasn't loaded.
-       We hide all child content and overlay a pure-CSS hamburger.
+       GLOBAL: Hide ALL Material Symbols icon-text
+       ---------------------------------------------------------------
+       Streamlit uses the "Material Symbols Rounded" web font for UI
+       icons. The font is applied via inline font-family (not a CSS
+       class). Icons render as <span data-testid="stIconMaterial">
+       with text content like "keyboard_double_arrow_right".
+
+       When the web font fails to load (common on mobile), the raw
+       icon names render as visible text throughout the UI.
+
+       We collapse ALL such elements. The app uses emoji for
+       navigation, which don't depend on the web font.
        --------------------------------------------------------------- */
+    [data-testid="stIconMaterial"] {
+        font-size: 0 !important;
+        color: transparent !important;
+        -webkit-text-fill-color: transparent !important;
+        width: 0 !important;
+        height: 0 !important;
+        max-width: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        display: inline-block !important;
+        line-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ---------------------------------------------------------------
+       Sidebar toggle buttons
+       ---------------------------------------------------------------
+       With icon text hidden, the toggle buttons collapse to zero.
+       We restore their dimensions and add CSS replacement icons.
+
+       Streamlit 1.38+ uses: data-testid="stSidebarCollapseButton"
+       Streamlit <1.38 uses:  data-testid="collapsedControl"
+       --------------------------------------------------------------- */
+
+    /* Collapse button (close sidebar) – Streamlit 1.38+ */
+    [data-testid="stSidebarCollapseButton"] {
+        position: relative !important;
+        min-width: 2.75rem !important;
+        min-height: 2.75rem !important;
+        overflow: hidden !important;
+    }
+    [data-testid="stSidebarCollapseButton"] button {
+        position: relative !important;
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+        min-width: 2.75rem !important;
+        overflow: hidden !important;
+        background: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 0.5rem !important;
+        padding: 0 !important;
+    }
+    [data-testid="stSidebarCollapseButton"] button::after {
+        content: "\2715";
+        position: absolute;
+        inset: 0;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem !important;
+        color: #e2e8f0 !important;
+        pointer-events: none;
+    }
+
+    /* Collapse button – Streamlit <1.38 (backward compat) */
     [data-testid="collapsedControl"] {
         position: relative !important;
         width: 2.75rem !important;
@@ -90,16 +153,11 @@ st.markdown(
         padding: 0 !important;
         z-index: 1100 !important;
     }
-    /* Hide ALL text / icons inside the toggle button */
-    [data-testid="collapsedControl"] > * {
+    [data-testid="collapsedControl"] * {
         visibility: hidden !important;
         font-size: 0 !important;
-        width: 0 !important;
-        height: 0 !important;
         overflow: hidden !important;
-        position: absolute !important;
     }
-    /* Overlay a hamburger character */
     [data-testid="collapsedControl"]::after {
         content: "\2630";
         position: absolute;
@@ -113,12 +171,53 @@ st.markdown(
         pointer-events: none;
     }
 
-    /* Expander chevrons – hide icon-text fallback */
-    [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
-    [data-testid="stExpander"] summary [class*="icon"] {
+    /* Expand button (open sidebar) – uses :has() to target
+       any button in the header that contains a hidden icon */
+    [data-testid="stHeader"] button:has([data-testid="stIconMaterial"]) {
+        position: relative !important;
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+        min-width: 2.75rem !important;
+        min-height: 2.75rem !important;
         overflow: hidden !important;
-        max-width: 1.2rem;
-        max-height: 1.2rem;
+        background: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 0.5rem !important;
+        padding: 0 !important;
+    }
+    [data-testid="stHeader"] button:has([data-testid="stIconMaterial"])::after {
+        content: "\2630";
+        position: absolute;
+        inset: 0;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem !important;
+        color: #e2e8f0 !important;
+        pointer-events: none;
+    }
+
+    /* Fallback: expand button inside collapsed sidebar */
+    [data-testid="stSidebar"][aria-expanded="false"] button:has([data-testid="stIconMaterial"]) {
+        position: relative !important;
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+        min-width: 2.75rem !important;
+        min-height: 2.75rem !important;
+        overflow: hidden !important;
+        background: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 0.5rem !important;
+        padding: 0 !important;
+    }
+    [data-testid="stSidebar"][aria-expanded="false"] button:has([data-testid="stIconMaterial"])::after {
+        content: "\2630";
+        position: absolute;
+        inset: 0;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem !important;
+        color: #e2e8f0 !important;
+        pointer-events: none;
     }
 
     /* ---------------------------------------------------------------
@@ -126,6 +225,16 @@ st.markdown(
        --------------------------------------------------------------- */
     [data-testid="stSidebar"] {
         background-color: #1a2632 !important;
+    }
+
+    /* Ensure sidebar content has adequate padding (prevents left-clip) */
+    [data-testid="stSidebarContent"] {
+        padding-left: 1.25rem !important;
+        padding-right: 0.75rem !important;
+    }
+    [data-testid="stSidebar"] .block-container {
+        padding-left: 1.25rem !important;
+        padding-right: 0.75rem !important;
     }
 
     [data-testid="stSidebar"] button {
@@ -233,6 +342,10 @@ st.markdown(
         [data-testid="stHorizontalBlock"] {
             gap: 0.3rem;
         }
+
+        [data-testid="stSidebar"] {
+            overflow-x: hidden !important;
+        }
     }
 </style>
 """,
@@ -316,7 +429,7 @@ def activate_demo_mode():
     st.session_state.authenticated = True
     st.session_state.auth = None
     st.session_state.api = DemoAPI()
-    _run_startup_diagnostics(st.session_state.api, is_demo=True)
+    # Skip diagnostics in demo mode – demo always returns OK which is misleading
 
 
 def deactivate_session():
@@ -523,28 +636,28 @@ and encrypted local storage.
 
     st.markdown("Select a utility from the sidebar to begin.")
 
-    # Diagnostics summary
-    report = get_cached_report()
-    if report:
-        render_diagnostics_summary(report)
-    else:
-        # Run diagnostics if not cached yet
-        if st.session_state.api:
-            with st.spinner("Running endpoint diagnostics..."):
-                report = _run_startup_diagnostics(
-                    st.session_state.api, is_demo=is_demo_mode()
-                )
+    # Diagnostics summary – only show for live API connections
+    if not is_demo_mode():
+        report = get_cached_report()
+        if report:
             render_diagnostics_summary(report)
-
-    c_diag, _ = st.columns([1, 3])
-    with c_diag:
-        if st.button("Re-run Diagnostics", key="home_rerun_diag"):
+        else:
             if st.session_state.api:
-                with st.spinner("Running diagnostics..."):
+                with st.spinner("Running endpoint diagnostics..."):
                     report = _run_startup_diagnostics(
-                        st.session_state.api, is_demo=is_demo_mode()
+                        st.session_state.api, is_demo=False
                     )
-                st.rerun()
+                render_diagnostics_summary(report)
+
+        c_diag, _ = st.columns([1, 3])
+        with c_diag:
+            if st.button("Re-run Diagnostics", key="home_rerun_diag"):
+                if st.session_state.api:
+                    with st.spinner("Running diagnostics..."):
+                        report = _run_startup_diagnostics(
+                            st.session_state.api, is_demo=False
+                        )
+                    st.rerun()
 
     st.markdown("---")
 
