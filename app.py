@@ -37,7 +37,7 @@ from utilities import (
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
@@ -65,77 +65,94 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    :root {
-        --mobile-padding: 0.75rem;
-        --sidebar-width: 16rem;
-    }
+    /* ===============================================================
+       Admin Layers – Global Styles
+       =============================================================== */
 
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /*
-     * Hide ALL Material Symbols icon-text globally.
-     * Streamlit renders icon names like "double_arrow_right", "arrow_down"
-     * as text that gets styled via a web font. When the font fails or
-     * CSS doesn't clip them, the raw text shows. This blanket rule catches
-     * every instance.
-     */
-    [data-testid="collapsedControl"],
-    [data-testid="collapsedControl"] * {
-        font-size: 0 !important;
-        color: transparent !important;
-        line-height: 0 !important;
-        overflow: hidden !important;
-        letter-spacing: -9999px !important;
-    }
+    /* ---------------------------------------------------------------
+       Sidebar toggle (collapsed-control / hamburger)
+       Streamlit renders Material Symbols icon names as literal text
+       ("double_arrow_right") when the web font hasn't loaded.
+       We hide all child content and overlay a pure-CSS hamburger.
+       --------------------------------------------------------------- */
     [data-testid="collapsedControl"] {
-        width: 2.5rem !important;
-        height: 2.5rem !important;
-        max-width: 2.5rem !important;
-        min-width: 2.5rem !important;
-        border-radius: 0.5rem;
-        background: rgba(15, 23, 42, 0.85) !important;
         position: relative !important;
+        width: 2.75rem !important;
+        height: 2.75rem !important;
+        min-width: 2.75rem !important;
+        max-width: 2.75rem !important;
+        overflow: hidden !important;
+        background: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 0.5rem;
         padding: 0 !important;
         z-index: 1100 !important;
     }
+    /* Hide ALL text / icons inside the toggle button */
+    [data-testid="collapsedControl"] > * {
+        visibility: hidden !important;
+        font-size: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        position: absolute !important;
+    }
+    /* Overlay a hamburger character */
     [data-testid="collapsedControl"]::after {
         content: "\2630";
-        font-size: 1.3rem;
-        color: #e2e8f0;
-        letter-spacing: normal !important;
-        display: block !important;
-        visibility: visible !important;
         position: absolute;
         inset: 0;
-        line-height: 2.5rem !important;
-        text-align: center;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem !important;
+        color: #e2e8f0 !important;
+        visibility: visible !important;
         pointer-events: none;
     }
 
-    /* Expander chevrons — hide icon-text fallback ("arrow_down" etc.) */
-    [data-testid="stExpander"] details summary span[data-testid],
-    [data-testid="stExpander"] details summary [class*="icon"],
-    [data-testid="stExpander"] details summary svg {
-        font-size: 0 !important;
-        color: transparent !important;
+    /* Expander chevrons – hide icon-text fallback */
+    [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+    [data-testid="stExpander"] summary [class*="icon"] {
         overflow: hidden !important;
-        max-width: 1rem;
-        max-height: 1rem;
-        letter-spacing: -9999px !important;
+        max-width: 1.2rem;
+        max-height: 1.2rem;
     }
 
+    /* ---------------------------------------------------------------
+       Sidebar chrome
+       --------------------------------------------------------------- */
     [data-testid="stSidebar"] {
-        background-color: #1a2632;
+        background-color: #1a2632 !important;
     }
 
+    [data-testid="stSidebar"] button {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.82rem;
+        border-radius: 6px;
+        line-height: 1.2;
+    }
+
+    [data-testid="stSidebar"] .stButton + .stButton {
+        margin-top: 0.2rem;
+    }
+
+    [data-testid="stSidebar"] hr {
+        margin: 0.4rem 0;
+    }
+
+    /* ---------------------------------------------------------------
+       Component styles
+       --------------------------------------------------------------- */
     .nav-header {
         font-size: 0.7rem;
         font-weight: 600;
         color: #8899aa;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin: 1.25rem 0 0.5rem 0;
+        margin: 0.8rem 0 0.3rem 0;
     }
 
     .status-badge {
@@ -145,19 +162,16 @@ st.markdown(
         font-weight: 500;
         display: inline-block;
     }
-
     .status-connected {
         background: #1e3a2f;
         color: #4ade80;
         border: 1px solid #2d5a3f;
     }
-
     .status-demo {
         background: #3a2e1e;
         color: #fbbf24;
         border: 1px solid #5a4a2d;
     }
-
     .status-disconnected {
         background: #3a1e1e;
         color: #f87171;
@@ -174,7 +188,6 @@ st.markdown(
         font-size: 0.85rem;
     }
 
-    /* Compact info row for detail headers */
     .info-row {
         display: flex;
         flex-wrap: wrap;
@@ -182,17 +195,13 @@ st.markdown(
         padding: 0.5rem 0;
         font-size: 0.9rem;
     }
-    .info-row .info-item {
-        color: #ccc;
-    }
+    .info-row .info-item { color: #ccc; }
     .info-row .info-label {
         color: #8899aa;
         font-size: 0.75rem;
         text-transform: uppercase;
     }
-    .info-row .info-value {
-        font-weight: 600;
-    }
+    .info-row .info-value { font-weight: 600; }
 
     .storage-info {
         font-size: 0.75rem;
@@ -200,85 +209,15 @@ st.markdown(
         padding: 4px 0;
     }
 
-    /* Mobile-first layout refinements */
-    .block-container {
-        padding-top: 1rem;
-        padding-left: 1.5rem;
-        padding-right: 1.5rem;
-        padding-bottom: 2rem;
-    }
-
-    [data-testid="stSidebar"] {
-        min-width: var(--sidebar-width);
-        max-width: var(--sidebar-width);
-        overflow: hidden;
-    }
-
-    [data-testid="stSidebar"] .block-container {
-        padding-top: 0.75rem;
-        padding-left: 0.75rem;
-        padding-right: 0.75rem;
-    }
-
-    [data-testid="stSidebar"] button {
-        padding: 0.35rem 0.45rem;
-        font-size: 0.82rem;
-        border-radius: 6px;
-        line-height: 1.1;
-    }
-
-    [data-testid="stSidebar"] .stButton + .stButton {
-        margin-top: 0.2rem;
-    }
-
-    [data-testid="stSidebar"] .nav-header {
-        margin: 0.6rem 0 0.25rem 0;
-    }
-
-    [data-testid="stSidebar"] hr {
-        margin: 0.4rem 0;
-    }
-
-
+    /* ---------------------------------------------------------------
+       Mobile refinements  (max-width: 768px)
+       We do NOT override sidebar positioning – Streamlit handles
+       the overlay/slide natively. We only adjust spacing and
+       touch targets.
+       --------------------------------------------------------------- */
     @media (max-width: 768px) {
         .block-container {
-            padding-left: var(--mobile-padding);
-            padding-right: var(--mobile-padding);
-            padding-top: 3rem;
-        }
-
-        /* Sidebar: full-screen overlay on mobile */
-        [data-testid="stSidebar"] {
-            position: fixed !important;
-            top: 0;
-            left: 0;
-            width: 85% !important;
-            min-width: 85% !important;
-            max-width: 85% !important;
-            height: 100vh !important;
-            z-index: 1000;
-            background-color: #1a2632;
-            transform: translateX(-100%);
-            transition: transform 0.25s ease;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.5);
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        section[data-testid="stSidebar"][aria-expanded="true"] {
-            transform: translateX(0);
-        }
-
-        /* Keep main content below sidebar layer */
-        [data-testid="stAppViewContainer"] {
-            position: relative;
-            z-index: 1;
-        }
-
-        [data-testid="stSidebar"] .block-container {
-            padding-left: var(--mobile-padding);
-            padding-right: var(--mobile-padding);
-            padding-top: 1rem;
+            padding: 3rem 0.75rem 2rem !important;
         }
 
         [data-testid="stSidebar"] button {
@@ -287,12 +226,10 @@ st.markdown(
             min-height: 2.5rem;
         }
 
-        /* Bigger touch targets on mobile */
         [data-testid="stSidebar"] .stButton + .stButton {
             margin-top: 0.3rem;
         }
 
-        /* Ensure action bar columns don't get too cramped */
         [data-testid="stHorizontalBlock"] {
             gap: 0.3rem;
         }
