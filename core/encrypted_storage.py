@@ -78,18 +78,18 @@ class EncryptedStorage:
         """Initialize local storage directory if available."""
         # Try home directory first
         try:
-            storage_dir = os.path.join(Path.home(), '.admin_layers')
+            storage_dir = os.path.join(Path.home(), ".admin_layers")
             os.makedirs(storage_dir, exist_ok=True)
             # Test write access
-            test_file = os.path.join(storage_dir, '.write_test')
-            with open(test_file, 'w') as f:
-                f.write('test')
+            test_file = os.path.join(storage_dir, ".write_test")
+            with open(test_file, "w") as f:
+                f.write("test")
             os.remove(test_file)
             self._storage_dir = storage_dir
         except (OSError, PermissionError):
             # Fall back to temp directory
             try:
-                storage_dir = os.path.join(tempfile.gettempdir(), '.admin_layers')
+                storage_dir = os.path.join(tempfile.gettempdir(), ".admin_layers")
                 os.makedirs(storage_dir, exist_ok=True)
                 self._storage_dir = storage_dir
             except (OSError, PermissionError):
@@ -111,11 +111,13 @@ class EncryptedStorage:
 
     def encrypt(self, data: str) -> str:
         """Encrypt a string and return base64-encoded ciphertext."""
+        assert self._fernet is not None, "Encryption not initialized"
         return self._fernet.encrypt(data.encode()).decode()
 
     def decrypt(self, encrypted_data: str) -> Optional[str]:
         """Decrypt base64-encoded ciphertext. Returns None on failure."""
         try:
+            assert self._fernet is not None, "Encryption not initialized"
             return self._fernet.decrypt(encrypted_data.encode()).decode()
         except (InvalidToken, Exception):
             return None
@@ -143,7 +145,7 @@ class EncryptedStorage:
             # Also persist to file if available
             if self._storage_dir:
                 file_path = os.path.join(self._storage_dir, f"{key}.enc")
-                with open(file_path, 'w') as f:
+                with open(file_path, "w") as f:
                     f.write(encrypted)
 
             return True
@@ -171,7 +173,7 @@ class EncryptedStorage:
             file_path = os.path.join(self._storage_dir, f"{key}.enc")
             if os.path.exists(file_path):
                 try:
-                    with open(file_path, 'r') as f:
+                    with open(file_path, "r") as f:
                         encrypted = f.read().strip()
                 except (OSError, IOError):
                     pass
@@ -203,14 +205,19 @@ class EncryptedStorage:
         except Exception:
             return False
 
-    def store_credentials(self, client_id: str, client_secret: str, region: str) -> bool:
+    def store_credentials(
+        self, client_id: str, client_secret: str, region: str
+    ) -> bool:
         """Store Genesys Cloud credentials encrypted."""
-        return self.store("gc_credentials", {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "region": region,
-            "stored_at": datetime.now().isoformat()
-        })
+        return self.store(
+            "gc_credentials",
+            {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "region": region,
+                "stored_at": datetime.now().isoformat(),
+            },
+        )
 
     def retrieve_credentials(self) -> Optional[Dict[str, str]]:
         """Retrieve stored credentials."""
@@ -267,9 +274,9 @@ class EncryptedStorage:
             "storage_dir": self._storage_dir,
             "persistent": self.is_persistent,
             "key_source": (
-                "st.secrets" if has_secrets_key
-                else "environment" if has_env_key
-                else "session (auto-generated)"
+                "st.secrets"
+                if has_secrets_key
+                else "environment" if has_env_key else "session (auto-generated)"
             ),
             "encryption": "Fernet (AES-128-CBC + HMAC-SHA256)",
         }

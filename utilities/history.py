@@ -7,10 +7,10 @@ Supports both local filesystem and cloud (session state) backends.
 
 import json
 import os
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass, asdict
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -18,6 +18,7 @@ import streamlit as st
 @dataclass
 class ActionRecord:
     """Record of a single action."""
+
     id: str
     timestamp: str
     utility: str
@@ -51,12 +52,12 @@ class ActionHistory:
 
         if storage_dir is None:
             try:
-                storage_dir = os.path.join(Path.home(), '.admin_layers')
+                storage_dir = os.path.join(Path.home(), ".admin_layers")
                 os.makedirs(storage_dir, exist_ok=True)
                 # Test write access
-                test_path = os.path.join(storage_dir, '.write_test')
-                with open(test_path, 'w') as f:
-                    f.write('test')
+                test_path = os.path.join(storage_dir, ".write_test")
+                with open(test_path, "w") as f:
+                    f.write("test")
                 os.remove(test_path)
                 self._use_filesystem = True
             except (OSError, PermissionError):
@@ -70,7 +71,7 @@ class ActionHistory:
 
         if self._use_filesystem:
             self.storage_dir = storage_dir
-            self.history_file = os.path.join(storage_dir, 'action_history.json')
+            self.history_file = os.path.join(storage_dir, "action_history.json")
 
         # Load existing history
         self._history: List[Dict] = self._load_history()
@@ -81,13 +82,13 @@ class ActionHistory:
         if self._use_filesystem and self.history_file:
             if os.path.exists(self.history_file):
                 try:
-                    with open(self.history_file, 'r', encoding='utf-8') as f:
+                    with open(self.history_file, "r", encoding="utf-8") as f:
                         return json.load(f)
                 except (json.JSONDecodeError, IOError):
                     pass
 
         # Fall back to session state
-        return st.session_state.get('_action_history_data', [])
+        return st.session_state.get("_action_history_data", [])
 
     def _save_history(self) -> None:
         """Save history to filesystem and session state."""
@@ -97,14 +98,14 @@ class ActionHistory:
         # Also save to filesystem if available
         if self._use_filesystem and self.history_file:
             try:
-                with open(self.history_file, 'w', encoding='utf-8') as f:
+                with open(self.history_file, "w", encoding="utf-8") as f:
                     json.dump(self._history, f, indent=2, ensure_ascii=False)
             except (IOError, OSError):
                 pass
 
     def _generate_id(self) -> str:
         """Generate a unique action ID."""
-        return datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
     def record_action(
         self,
@@ -115,7 +116,7 @@ class ActionHistory:
         details: Dict[str, Any],
         affected_count: int,
         status: str,
-        user_ids: List[str] = None
+        user_ids: List[str] = None,
     ) -> str:
         """
         Record an action to history.
@@ -145,7 +146,7 @@ class ActionHistory:
             details=details,
             affected_count=affected_count,
             status=status,
-            user_ids=user_ids or []
+            user_ids=user_ids or [],
         )
 
         self._history.insert(0, asdict(record))  # Most recent first
@@ -162,7 +163,7 @@ class ActionHistory:
         utility: str = None,
         action: str = None,
         target_id: str = None,
-        limit: int = 50
+        limit: int = 50,
     ) -> List[Dict]:
         """
         Get filtered history.
@@ -179,20 +180,20 @@ class ActionHistory:
         results = self._history
 
         if utility:
-            results = [r for r in results if r.get('utility') == utility]
+            results = [r for r in results if r.get("utility") == utility]
 
         if action:
-            results = [r for r in results if r.get('action') == action]
+            results = [r for r in results if r.get("action") == action]
 
         if target_id:
-            results = [r for r in results if r.get('target_id') == target_id]
+            results = [r for r in results if r.get("target_id") == target_id]
 
         return results[:limit]
 
     def get_action(self, action_id: str) -> Optional[Dict]:
         """Get a specific action by ID."""
         for record in self._history:
-            if record.get('id') == action_id:
+            if record.get("id") == action_id:
                 return record
         return None
 
@@ -207,16 +208,16 @@ class ActionHistory:
         if not action:
             return None
 
-        if action.get('status') != 'success':
+        if action.get("status") != "success":
             return None
 
-        if action.get('action') not in ['add_members', 'remove_members']:
+        if action.get("action") not in ["add_members", "remove_members"]:
             return None
 
         return {
-            'target_id': action.get('target_id'),
-            'user_ids': action.get('user_ids', []),
-            'original_action': action.get('action')
+            "target_id": action.get("target_id"),
+            "user_ids": action.get("user_ids", []),
+            "original_action": action.get("action"),
         }
 
     def clear_history(self) -> None:

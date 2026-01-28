@@ -5,28 +5,39 @@ Modular utilities for Genesys Cloud administration.
 Supports hosted deployment on Streamlit Community Cloud with encrypted storage.
 """
 
-import streamlit as st
 from typing import Dict, Type
 
-# Core modules
-from genesys_cloud import GenesysAuth, GenesysCloudAPI, load_config, get_regions
-from core.encrypted_storage import get_storage
+import streamlit as st
+
 from core.demo import DemoAPI, is_demo_mode, set_demo_mode
 from core.diagnostics import (
-    run_diagnostics, get_cached_report, cache_report, clear_cached_report,
+    cache_report,
+    clear_cached_report,
+    get_cached_report,
     render_diagnostics_summary,
+    run_diagnostics,
 )
+from core.encrypted_storage import get_storage
 from core.services import validate_backend
 
+# Core modules
+from genesys_cloud import GenesysAuth, GenesysCloudAPI, get_regions, load_config
+
 # Utilities
-from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, QueueManagerUtility, UserManagerUtility
+from utilities import (
+    BaseUtility,
+    GroupManagerUtility,
+    QueueManagerUtility,
+    SkillManagerUtility,
+    UserManagerUtility,
+)
 
 # =============================================================================
 # Configuration
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
@@ -44,14 +55,15 @@ st.set_page_config(
     page_title=APP_NAME,
     page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",
 )
 
 # =============================================================================
 # Styles
 # =============================================================================
 
-st.markdown("""
+st.markdown(
+    """
 <style>
     :root {
         --mobile-padding: 0.75rem;
@@ -61,53 +73,56 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Hamburger menu button — hide ALL default content, show clean toggle */
-    [data-testid="collapsedControl"] {
+    /*
+     * Hide ALL Material Symbols icon-text globally.
+     * Streamlit renders icon names like "double_arrow_right", "arrow_down"
+     * as text that gets styled via a web font. When the font fails or
+     * CSS doesn't clip them, the raw text shows. This blanket rule catches
+     * every instance.
+     */
+    [data-testid="collapsedControl"],
+    [data-testid="collapsedControl"] * {
+        font-size: 0 !important;
+        color: transparent !important;
+        line-height: 0 !important;
         overflow: hidden !important;
+        letter-spacing: -9999px !important;
+    }
+    [data-testid="collapsedControl"] {
         width: 2.5rem !important;
         height: 2.5rem !important;
         max-width: 2.5rem !important;
         min-width: 2.5rem !important;
         border-radius: 0.5rem;
         background: rgba(15, 23, 42, 0.85) !important;
-        font-size: 0 !important;
-        line-height: 0 !important;
-        text-indent: -9999px !important;
-        color: transparent !important;
         position: relative !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
         padding: 0 !important;
         z-index: 1100 !important;
-    }
-    [data-testid="collapsedControl"] * {
-        display: none !important;
-        font-size: 0 !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
     }
     [data-testid="collapsedControl"]::after {
         content: "\2630";
         font-size: 1.3rem;
         color: #e2e8f0;
-        text-indent: 0 !important;
+        letter-spacing: normal !important;
         display: block !important;
         visibility: visible !important;
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: auto !important;
-        height: auto !important;
+        inset: 0;
+        line-height: 2.5rem !important;
+        text-align: center;
+        pointer-events: none;
     }
 
-    /* Fix expander arrow icon text */
+    /* Expander chevrons — hide icon-text fallback ("arrow_down" etc.) */
+    [data-testid="stExpander"] details summary span[data-testid],
+    [data-testid="stExpander"] details summary [class*="icon"],
     [data-testid="stExpander"] details summary svg {
-        overflow: hidden;
+        font-size: 0 !important;
+        color: transparent !important;
+        overflow: hidden !important;
         max-width: 1rem;
+        max-height: 1rem;
+        letter-spacing: -9999px !important;
     }
 
     [data-testid="stSidebar"] {
@@ -283,22 +298,25 @@ st.markdown("""
         }
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # =============================================================================
 # Session State
 # =============================================================================
 
+
 def init_session_state():
     """Initialize global session state."""
     defaults = {
-        'authenticated': False,
-        'auth': None,
-        'api': None,
-        'current_utility': None,
-        'page': 'home',
-        'demo_mode': False,
-        'local_user': None,
+        "authenticated": False,
+        "auth": None,
+        "api": None,
+        "current_utility": None,
+        "page": "home",
+        "demo_mode": False,
+        "local_user": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -345,7 +363,7 @@ def try_auto_auth():
         auth = GenesysAuth.from_credentials(
             creds["client_id"],
             creds["client_secret"],
-            creds.get("region", "mypurecloud.com")
+            creds.get("region", "mypurecloud.com"),
         )
         success, _ = auth.authenticate()
         if success:
@@ -371,13 +389,14 @@ def deactivate_session():
     st.session_state.auth = None
     st.session_state.api = None
     st.session_state.current_utility = None
-    st.session_state.page = 'home'
+    st.session_state.page = "home"
     clear_cached_report()
 
 
 # =============================================================================
 # Sidebar
 # =============================================================================
+
 
 def render_sidebar():
     """Render main sidebar."""
@@ -391,17 +410,17 @@ def render_sidebar():
         if is_demo_mode():
             st.markdown(
                 '<span class="status-badge status-demo">◉ Demo Mode</span>',
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         elif st.session_state.authenticated:
             st.markdown(
                 '<span class="status-badge status-connected">◉ Connected</span>',
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
         else:
             st.markdown(
                 '<span class="status-badge status-disconnected">◉ Disconnected</span>',
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
 
         st.markdown("---")
@@ -410,7 +429,7 @@ def render_sidebar():
         st.markdown('<p class="nav-header">Navigation</p>', unsafe_allow_html=True)
 
         if st.button("🏠 Home", use_container_width=True, key="nav_home"):
-            st.session_state.page = 'home'
+            st.session_state.page = "home"
             st.session_state.current_utility = None
             st.rerun()
 
@@ -434,10 +453,10 @@ def render_sidebar():
                     f"{config.icon} {config.name}",
                     use_container_width=True,
                     key=f"nav_{util_id}",
-                    disabled=not st.session_state.authenticated
+                    disabled=not st.session_state.authenticated,
                 ):
                     st.session_state.current_utility = util_id
-                    st.session_state.page = 'utility'
+                    st.session_state.page = "utility"
                     st.rerun()
 
         st.markdown("---")
@@ -449,20 +468,26 @@ def render_sidebar():
             if is_demo_mode():
                 st.caption("Mode: Demo (sample data)")
             else:
-                region = st.session_state.auth.config.region if st.session_state.auth else "Unknown"
+                region = (
+                    st.session_state.auth.config.region
+                    if st.session_state.auth
+                    else "Unknown"
+                )
                 st.caption(f"Region: {region}")
 
-            if st.button("🔓 Disconnect", use_container_width=True, key="nav_disconnect"):
+            if st.button(
+                "🔓 Disconnect", use_container_width=True, key="nav_disconnect"
+            ):
                 deactivate_session()
                 st.rerun()
         else:
             if st.button("🔑 Connect", use_container_width=True, key="nav_connect"):
-                st.session_state.page = 'connect'
+                st.session_state.page = "connect"
                 st.rerun()
 
         # Storage info
         if st.button("🔒 Storage Info", use_container_width=True, key="nav_storage"):
-            st.session_state.page = 'storage_info'
+            st.session_state.page = "storage_info"
             st.session_state.current_utility = None
             st.rerun()
 
@@ -491,20 +516,22 @@ def render_utility_sidebar():
 # Pages
 # =============================================================================
 
+
 def page_home():
     """Home page."""
     # Demo mode banner
     if is_demo_mode():
         st.markdown(
             '<div class="demo-banner">'
-            '⚡ <strong>Demo Mode</strong> — '
-            'Exploring with sample data. No real Genesys Cloud connection. '
-            'Connect with real credentials to manage your org.'
-            '</div>',
-            unsafe_allow_html=True
+            "⚡ <strong>Demo Mode</strong> — "
+            "Exploring with sample data. No real Genesys Cloud connection. "
+            "Connect with real credentials to manage your org."
+            "</div>",
+            unsafe_allow_html=True,
         )
 
-    st.markdown("## Welcome to Admin Layers")
+    st.markdown(f"## Welcome to Admin Layers")
+    st.caption(f"v{APP_VERSION}")
 
     if not st.session_state.authenticated:
         st.markdown(
@@ -520,14 +547,13 @@ def page_home():
                 "to manage groups, skills, and queues."
             )
             if st.button("🔑 Connect", use_container_width=True, key="home_connect"):
-                st.session_state.page = 'connect'
+                st.session_state.page = "connect"
                 st.rerun()
 
         with col2:
             st.markdown("#### Try Demo Mode")
             st.markdown(
-                "Explore the interface with sample data. "
-                "No credentials required."
+                "Explore the interface with sample data. " "No credentials required."
             )
             if st.button("⚡ Launch Demo", use_container_width=True, key="home_demo"):
                 activate_demo_mode()
@@ -569,8 +595,7 @@ and encrypted local storage.
         if st.session_state.api:
             with st.spinner("Running endpoint diagnostics..."):
                 report = _run_startup_diagnostics(
-                    st.session_state.api,
-                    is_demo=is_demo_mode()
+                    st.session_state.api, is_demo=is_demo_mode()
                 )
             render_diagnostics_summary(report)
 
@@ -580,8 +605,7 @@ and encrypted local storage.
             if st.session_state.api:
                 with st.spinner("Running diagnostics..."):
                     report = _run_startup_diagnostics(
-                        st.session_state.api,
-                        is_demo=is_demo_mode()
+                        st.session_state.api, is_demo=is_demo_mode()
                     )
                 st.rerun()
 
@@ -603,7 +627,7 @@ and encrypted local storage.
 
                 if st.button("Open", key=f"open_{util_id}", use_container_width=True):
                     st.session_state.current_utility = util_id
-                    st.session_state.page = 'utility'
+                    st.session_state.page = "utility"
                     st.rerun()
 
 
@@ -630,22 +654,26 @@ def page_connect():
                 name = st.text_input(
                     "Display name",
                     value=(saved_profile or {}).get("name", ""),
-                    placeholder="Jane Admin"
+                    placeholder="Jane Admin",
                 )
                 email = st.text_input(
                     "Work email",
                     value=(saved_profile or {}).get("email", ""),
-                    placeholder="jane@company.com"
+                    placeholder="jane@company.com",
                 )
                 company = st.text_input(
                     "Company",
                     value=(saved_profile or {}).get("company", ""),
-                    placeholder="Company name"
+                    placeholder="Company name",
                 )
-                save_profile = st.form_submit_button("Save Local Profile", use_container_width=True)
+                save_profile = st.form_submit_button(
+                    "Save Local Profile", use_container_width=True
+                )
                 if save_profile:
                     if name and email:
-                        storage.store_local_user({"name": name, "email": email, "company": company})
+                        storage.store_local_user(
+                            {"name": name, "email": email, "company": company}
+                        )
                         st.session_state.local_user = storage.retrieve_local_user()
                         st.success("Local profile saved.")
                     else:
@@ -662,20 +690,21 @@ def page_connect():
             st.markdown("### OAuth Client Credentials")
             client_id = st.text_input(
                 "Client ID",
-                value=(saved_creds or {}).get("client_id", "") or (config.client_id if config else ''),
-                type="password"
+                value=(saved_creds or {}).get("client_id", "")
+                or (config.client_id if config else ""),
+                type="password",
             )
 
             client_secret = st.text_input(
                 "Client Secret",
-                value=(saved_creds or {}).get("client_secret", "") or (config.client_secret if config else ''),
-                type="password"
+                value=(saved_creds or {}).get("client_secret", "")
+                or (config.client_secret if config else ""),
+                type="password",
             )
 
             regions = get_regions()
-            default_region = (
-                (saved_creds or {}).get("region") or
-                (config.region if config else 'mypurecloud.com')
+            default_region = (saved_creds or {}).get("region") or (
+                config.region if config else "mypurecloud.com"
             )
             idx = regions.index(default_region) if default_region in regions else 0
             region = st.selectbox("Region", regions, index=idx)
@@ -683,12 +712,14 @@ def page_connect():
             remember = st.checkbox(
                 "Remember credentials (encrypted)",
                 value=saved_creds is not None,
-                help="Credentials are encrypted using AES-128-CBC with HMAC-SHA256"
+                help="Credentials are encrypted using AES-128-CBC with HMAC-SHA256",
             )
 
             if st.form_submit_button("Connect", use_container_width=True):
                 if client_id and client_secret:
-                    auth = GenesysAuth.from_credentials(client_id, client_secret, region)
+                    auth = GenesysAuth.from_credentials(
+                        client_id, client_secret, region
+                    )
                     success, message = auth.authenticate()
 
                     if success:
@@ -702,7 +733,7 @@ def page_connect():
                         st.session_state.auth = auth
                         st.session_state.api = GenesysCloudAPI(auth)
                         _run_startup_diagnostics(st.session_state.api, is_demo=False)
-                        st.session_state.page = 'home'
+                        st.session_state.page = "home"
                         st.rerun()
                     else:
                         st.error(message)
@@ -735,7 +766,12 @@ def page_connect():
             "All operations (add/remove) succeed without side effects."
         )
 
-        if st.button("⚡ Launch Demo Mode", type="primary", use_container_width=True, key="connect_demo"):
+        if st.button(
+            "⚡ Launch Demo Mode",
+            type="primary",
+            use_container_width=True,
+            key="connect_demo",
+        ):
             activate_demo_mode()
             st.rerun()
 
@@ -746,15 +782,15 @@ def page_utility():
     if is_demo_mode():
         st.markdown(
             '<div class="demo-banner">'
-            '⚡ <strong>Demo Mode</strong> — Sample data only'
-            '</div>',
-            unsafe_allow_html=True
+            "⚡ <strong>Demo Mode</strong> — Sample data only"
+            "</div>",
+            unsafe_allow_html=True,
         )
 
     util_id = st.session_state.current_utility
 
     if not util_id or util_id not in UTILITIES:
-        st.session_state.page = 'home'
+        st.session_state.page = "home"
         st.rerun()
         return
 
@@ -861,6 +897,7 @@ def page_storage_info():
 # Main
 # =============================================================================
 
+
 def main():
     init_session_state()
     try_auto_auth()
@@ -875,13 +912,13 @@ def main():
     # Route to page
     page = st.session_state.page
 
-    if page == 'home':
+    if page == "home":
         page_home()
-    elif page == 'connect':
+    elif page == "connect":
         page_connect()
-    elif page == 'utility':
+    elif page == "utility":
         page_utility()
-    elif page == 'storage_info':
+    elif page == "storage_info":
         page_storage_info()
     else:
         page_home()

@@ -15,92 +15,164 @@ from typing import Any, Dict, Generator, List, Optional
 
 import streamlit as st
 
-
 # =============================================================================
 # Demo Data
 # =============================================================================
 
 DEMO_USERS = [
-    {"id": f"user-{i:04d}", "name": name, "email": f"{name.lower().replace(' ', '.')}@acmecorp.com",
-     "department": dept, "title": title, "state": "active"}
-    for i, (name, dept, title) in enumerate([
-        ("Alice Johnson", "Support", "Senior Agent"),
-        ("Bob Martinez", "Support", "Team Lead"),
-        ("Carol Williams", "Sales", "Account Executive"),
-        ("David Chen", "Support", "Agent"),
-        ("Emma Davis", "Engineering", "Developer"),
-        ("Frank Wilson", "Support", "Senior Agent"),
-        ("Grace Lee", "Sales", "Sales Manager"),
-        ("Henry Brown", "Support", "Agent"),
-        ("Iris Taylor", "QA", "Quality Analyst"),
-        ("James Anderson", "Support", "Agent"),
-        ("Karen Thomas", "Support", "Supervisor"),
-        ("Liam Jackson", "Sales", "SDR"),
-        ("Maria Garcia", "Support", "Agent"),
-        ("Nathan White", "Engineering", "DevOps Engineer"),
-        ("Olivia Harris", "Support", "Senior Agent"),
-        ("Patrick Martin", "Support", "Agent"),
-        ("Quinn Robinson", "Sales", "Account Manager"),
-        ("Rachel Clark", "Support", "Agent"),
-        ("Samuel Lewis", "QA", "QA Lead"),
-        ("Tina Walker", "Support", "Agent"),
-        ("Ulysses Hall", "Support", "Agent"),
-        ("Victoria Allen", "Sales", "VP Sales"),
-        ("William Young", "Engineering", "CTO"),
-        ("Xena King", "Support", "Agent"),
-        ("Yuki Wright", "Support", "Trainer"),
-        ("Zachary Scott", "Support", "Agent"),
-        ("Angela Adams", "HR", "HR Manager"),
-        ("Brandon Baker", "Support", "Agent"),
-        ("Catherine Nelson", "Support", "Senior Agent"),
-        ("Derek Hill", "Support", "Agent"),
-    ])
+    {
+        "id": f"user-{i:04d}",
+        "name": name,
+        "email": f"{name.lower().replace(' ', '.')}@acmecorp.com",
+        "department": dept,
+        "title": title,
+        "state": "active",
+    }
+    for i, (name, dept, title) in enumerate(
+        [
+            ("Alice Johnson", "Support", "Senior Agent"),
+            ("Bob Martinez", "Support", "Team Lead"),
+            ("Carol Williams", "Sales", "Account Executive"),
+            ("David Chen", "Support", "Agent"),
+            ("Emma Davis", "Engineering", "Developer"),
+            ("Frank Wilson", "Support", "Senior Agent"),
+            ("Grace Lee", "Sales", "Sales Manager"),
+            ("Henry Brown", "Support", "Agent"),
+            ("Iris Taylor", "QA", "Quality Analyst"),
+            ("James Anderson", "Support", "Agent"),
+            ("Karen Thomas", "Support", "Supervisor"),
+            ("Liam Jackson", "Sales", "SDR"),
+            ("Maria Garcia", "Support", "Agent"),
+            ("Nathan White", "Engineering", "DevOps Engineer"),
+            ("Olivia Harris", "Support", "Senior Agent"),
+            ("Patrick Martin", "Support", "Agent"),
+            ("Quinn Robinson", "Sales", "Account Manager"),
+            ("Rachel Clark", "Support", "Agent"),
+            ("Samuel Lewis", "QA", "QA Lead"),
+            ("Tina Walker", "Support", "Agent"),
+            ("Ulysses Hall", "Support", "Agent"),
+            ("Victoria Allen", "Sales", "VP Sales"),
+            ("William Young", "Engineering", "CTO"),
+            ("Xena King", "Support", "Agent"),
+            ("Yuki Wright", "Support", "Trainer"),
+            ("Zachary Scott", "Support", "Agent"),
+            ("Angela Adams", "HR", "HR Manager"),
+            ("Brandon Baker", "Support", "Agent"),
+            ("Catherine Nelson", "Support", "Senior Agent"),
+            ("Derek Hill", "Support", "Agent"),
+        ]
+    )
 ]
 
 DEMO_GROUPS = [
-    {"id": "grp-0001", "name": "Tier 1 Support", "description": "Front-line support agents",
-     "memberCount": 15, "state": "active", "type": "official",
-     "visibility": "public", "rulesVisible": True},
-    {"id": "grp-0002", "name": "Tier 2 Support", "description": "Escalation support team",
-     "memberCount": 8, "state": "active", "type": "official",
-     "visibility": "public", "rulesVisible": True},
-    {"id": "grp-0003", "name": "Sales Team", "description": "All sales representatives",
-     "memberCount": 6, "state": "active", "type": "official",
-     "visibility": "public", "rulesVisible": True},
-    {"id": "grp-0004", "name": "All Hands", "description": "All employees",
-     "memberCount": 30, "state": "active", "type": "official",
-     "visibility": "public", "rulesVisible": True},
-    {"id": "grp-0005", "name": "Weekend Coverage", "description": "Weekend shift agents",
-     "memberCount": 10, "state": "active", "type": "official",
-     "visibility": "members", "rulesVisible": True},
+    {
+        "id": "grp-0001",
+        "name": "Tier 1 Support",
+        "description": "Front-line support agents",
+        "memberCount": 15,
+        "state": "active",
+        "type": "official",
+        "visibility": "public",
+        "rulesVisible": True,
+    },
+    {
+        "id": "grp-0002",
+        "name": "Tier 2 Support",
+        "description": "Escalation support team",
+        "memberCount": 8,
+        "state": "active",
+        "type": "official",
+        "visibility": "public",
+        "rulesVisible": True,
+    },
+    {
+        "id": "grp-0003",
+        "name": "Sales Team",
+        "description": "All sales representatives",
+        "memberCount": 6,
+        "state": "active",
+        "type": "official",
+        "visibility": "public",
+        "rulesVisible": True,
+    },
+    {
+        "id": "grp-0004",
+        "name": "All Hands",
+        "description": "All employees",
+        "memberCount": 30,
+        "state": "active",
+        "type": "official",
+        "visibility": "public",
+        "rulesVisible": True,
+    },
+    {
+        "id": "grp-0005",
+        "name": "Weekend Coverage",
+        "description": "Weekend shift agents",
+        "memberCount": 10,
+        "state": "active",
+        "type": "official",
+        "visibility": "members",
+        "rulesVisible": True,
+    },
 ]
 
 DEMO_QUEUES = [
-    {"id": "queue-0001", "name": "General Support", "description": "General inbound support",
-     "memberCount": 12, "mediaSettings": {"call": {"alertingTimeoutSeconds": 30}},
-     "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 60000},
-     "skillEvaluationMethod": "BEST", "callingPartyName": "Acme Support",
-     "callingPartyNumber": "+18005551234"},
-    {"id": "queue-0002", "name": "Billing Support", "description": "Billing and payments",
-     "memberCount": 8, "mediaSettings": {"call": {"alertingTimeoutSeconds": 25}},
-     "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 45000},
-     "skillEvaluationMethod": "BEST", "callingPartyName": "Acme Billing",
-     "callingPartyNumber": "+18005555678"},
-    {"id": "queue-0003", "name": "Sales Inbound", "description": "Inbound sales calls",
-     "memberCount": 6, "mediaSettings": {"call": {"alertingTimeoutSeconds": 20}},
-     "acwSettings": {"wrapupPrompt": "OPTIONAL", "timeoutMs": 30000},
-     "skillEvaluationMethod": "ALL", "callingPartyName": "Acme Sales",
-     "callingPartyNumber": "+18005559012"},
-    {"id": "queue-0004", "name": "Technical Support", "description": "Technical troubleshooting",
-     "memberCount": 5, "mediaSettings": {"call": {"alertingTimeoutSeconds": 35}},
-     "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 90000},
-     "skillEvaluationMethod": "BEST", "callingPartyName": "Acme Tech",
-     "callingPartyNumber": "+18005553456"},
-    {"id": "queue-0005", "name": "VIP Support", "description": "High-priority customer support",
-     "memberCount": 4, "mediaSettings": {"call": {"alertingTimeoutSeconds": 15}},
-     "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 120000},
-     "skillEvaluationMethod": "BEST", "callingPartyName": "Acme VIP",
-     "callingPartyNumber": "+18005557890"},
+    {
+        "id": "queue-0001",
+        "name": "General Support",
+        "description": "General inbound support",
+        "memberCount": 12,
+        "mediaSettings": {"call": {"alertingTimeoutSeconds": 30}},
+        "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 60000},
+        "skillEvaluationMethod": "BEST",
+        "callingPartyName": "Acme Support",
+        "callingPartyNumber": "+18005551234",
+    },
+    {
+        "id": "queue-0002",
+        "name": "Billing Support",
+        "description": "Billing and payments",
+        "memberCount": 8,
+        "mediaSettings": {"call": {"alertingTimeoutSeconds": 25}},
+        "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 45000},
+        "skillEvaluationMethod": "BEST",
+        "callingPartyName": "Acme Billing",
+        "callingPartyNumber": "+18005555678",
+    },
+    {
+        "id": "queue-0003",
+        "name": "Sales Inbound",
+        "description": "Inbound sales calls",
+        "memberCount": 6,
+        "mediaSettings": {"call": {"alertingTimeoutSeconds": 20}},
+        "acwSettings": {"wrapupPrompt": "OPTIONAL", "timeoutMs": 30000},
+        "skillEvaluationMethod": "ALL",
+        "callingPartyName": "Acme Sales",
+        "callingPartyNumber": "+18005559012",
+    },
+    {
+        "id": "queue-0004",
+        "name": "Technical Support",
+        "description": "Technical troubleshooting",
+        "memberCount": 5,
+        "mediaSettings": {"call": {"alertingTimeoutSeconds": 35}},
+        "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 90000},
+        "skillEvaluationMethod": "BEST",
+        "callingPartyName": "Acme Tech",
+        "callingPartyNumber": "+18005553456",
+    },
+    {
+        "id": "queue-0005",
+        "name": "VIP Support",
+        "description": "High-priority customer support",
+        "memberCount": 4,
+        "mediaSettings": {"call": {"alertingTimeoutSeconds": 15}},
+        "acwSettings": {"wrapupPrompt": "MANDATORY", "timeoutMs": 120000},
+        "skillEvaluationMethod": "BEST",
+        "callingPartyName": "Acme VIP",
+        "callingPartyNumber": "+18005557890",
+    },
 ]
 
 DEMO_SKILLS = [
@@ -122,10 +194,18 @@ DEMO_SKILLS = [
 DEMO_USER_SKILLS = {}
 for user in DEMO_USERS:
     n_skills = random.Random(user["id"]).randint(1, 5)
-    skills = random.Random(user["id"]).sample(DEMO_SKILLS, min(n_skills, len(DEMO_SKILLS)))
+    skills = random.Random(user["id"]).sample(
+        DEMO_SKILLS, min(n_skills, len(DEMO_SKILLS))
+    )
     DEMO_USER_SKILLS[user["id"]] = [
-        {"id": s["id"], "name": s["name"], "state": "active",
-         "proficiency": round(random.Random(user["id"] + s["id"]).uniform(1.0, 5.0), 1)}
+        {
+            "id": s["id"],
+            "name": s["name"],
+            "state": "active",
+            "proficiency": round(
+                random.Random(user["id"] + s["id"]).uniform(1.0, 5.0), 1
+            ),
+        }
         for s in skills
     ]
 
@@ -162,6 +242,7 @@ DEMO_DATA = {
 # Demo Mode State
 # =============================================================================
 
+
 def is_demo_mode() -> bool:
     """Check if demo mode is active."""
     return st.session_state.get("demo_mode", False)
@@ -176,9 +257,11 @@ def set_demo_mode(enabled: bool) -> None:
 # Mock API Response
 # =============================================================================
 
+
 @dataclass
 class MockAPIResponse:
     """Mock API response matching APIResponse interface."""
+
     success: bool
     data: Any = None
     error: Optional[str] = None
@@ -189,6 +272,7 @@ class MockAPIResponse:
 # Demo API Client
 # =============================================================================
 
+
 class DemoUsersAPI:
     """Mock Users API."""
 
@@ -198,10 +282,13 @@ class DemoUsersAPI:
                 return MockAPIResponse(success=True, data=u, status_code=200)
         return MockAPIResponse(success=False, error="User not found", status_code=404)
 
-    def search(self, query: str, fields: List[str] = None) -> List[Dict]:
+    def search(self, query: str, fields: Optional[List[str]] = None) -> List[Dict]:
         query_lower = query.lower()
-        return [u for u in DEMO_USERS
-                if query_lower in u["name"].lower() or query_lower in u["email"].lower()]
+        return [
+            u
+            for u in DEMO_USERS
+            if query_lower in u["name"].lower() or query_lower in u["email"].lower()
+        ]
 
     def search_by_email(self, email: str) -> Optional[Dict]:
         email_lower = email.lower()
@@ -228,7 +315,9 @@ class DemoUsersAPI:
                         result.append(g)
         return MockAPIResponse(success=True, data={"entities": result}, status_code=200)
 
-    def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
+    def list(
+        self, page_size: int = 100, max_pages: Optional[int] = None
+    ) -> Generator[Dict, None, None]:
         for u in DEMO_USERS:
             yield u
 
@@ -269,7 +358,7 @@ class DemoGroupsAPI:
 
     def search(self, query: str) -> List[Dict]:
         query_lower = query.lower()
-        return [g for g in DEMO_GROUPS if query_lower in g["name"].lower()]
+        return [g for g in DEMO_GROUPS if query_lower in str(g["name"]).lower()]
 
     def get_members(self, group_id: str) -> List[Dict]:
         return DEMO_GROUP_MEMBERS.get(group_id, [])
@@ -282,7 +371,9 @@ class DemoGroupsAPI:
                 user = next((u for u in DEMO_USERS if u["id"] == uid), None)
                 if user:
                     members.append(user)
-        return MockAPIResponse(success=True, data={"added": len(member_ids)}, status_code=200)
+        return MockAPIResponse(
+            success=True, data={"added": len(member_ids)}, status_code=200
+        )
 
     def remove_members(self, group_id: str, member_ids: List[str]) -> MockAPIResponse:
         members = DEMO_GROUP_MEMBERS.get(group_id, [])
@@ -311,7 +402,9 @@ class DemoGroupsAPI:
             status_code=200,
         )
 
-    def create(self, name: str, description: str, group_type: str, visibility: str) -> MockAPIResponse:
+    def create(
+        self, name: str, description: str, group_type: str, visibility: str
+    ) -> MockAPIResponse:
         group_id = f"grp-{uuid.uuid4().hex[:6]}"
         group = {
             "id": group_id,
@@ -354,7 +447,7 @@ class DemoQueuesAPI:
 
     def search(self, query: str) -> List[Dict]:
         query_lower = query.lower()
-        return [q for q in DEMO_QUEUES if query_lower in q["name"].lower()]
+        return [q for q in DEMO_QUEUES if query_lower in str(q["name"]).lower()]
 
     def get_members(self, queue_id: str) -> List[Dict]:
         return DEMO_QUEUE_MEMBERS.get(queue_id, [])
@@ -367,14 +460,18 @@ class DemoQueuesAPI:
                 user = next((u for u in DEMO_USERS if u["id"] == uid), None)
                 if user:
                     members.append(user)
-        return MockAPIResponse(success=True, data={"added": len(member_ids)}, status_code=200)
+        return MockAPIResponse(
+            success=True, data={"added": len(member_ids)}, status_code=200
+        )
 
     def remove_members(self, queue_id: str, member_ids: List[str]) -> MockAPIResponse:
         members = DEMO_QUEUE_MEMBERS.get(queue_id, [])
         DEMO_QUEUE_MEMBERS[queue_id] = [m for m in members if m["id"] not in member_ids]
         return MockAPIResponse(success=True, data=None, status_code=200)
 
-    def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
+    def list(
+        self, page_size: int = 100, max_pages: Optional[int] = None
+    ) -> Generator[Dict, None, None]:
         for q in DEMO_QUEUES:
             yield q
 
@@ -401,8 +498,12 @@ class DemoQueuesAPI:
         queue = {
             "id": queue_id,
             "memberCount": 0,
-            "mediaSettings": data.get("mediaSettings", {"call": {"alertingTimeoutSeconds": 30}}),
-            "acwSettings": data.get("acwSettings", {"wrapupPrompt": "MANDATORY", "timeoutMs": 60000}),
+            "mediaSettings": data.get(
+                "mediaSettings", {"call": {"alertingTimeoutSeconds": 30}}
+            ),
+            "acwSettings": data.get(
+                "acwSettings", {"wrapupPrompt": "MANDATORY", "timeoutMs": 60000}
+            ),
             "skillEvaluationMethod": data.get("skillEvaluationMethod", "BEST"),
             "callingPartyName": data.get("callingPartyName", ""),
             "callingPartyNumber": data.get("callingPartyNumber", ""),
@@ -441,7 +542,9 @@ class DemoRoutingAPI:
                 return MockAPIResponse(success=True, data=skill, status_code=200)
         return MockAPIResponse(success=False, error="Skill not found", status_code=404)
 
-    def list_skills_page(self, page_size: int = 25, page_number: int = 1) -> MockAPIResponse:
+    def list_skills_page(
+        self, page_size: int = 25, page_number: int = 1
+    ) -> MockAPIResponse:
         start = (page_number - 1) * page_size
         end = start + page_size
         entities = DEMO_SKILLS[start:end]
@@ -460,28 +563,36 @@ class DemoRoutingAPI:
         )
 
     def get_languages(self) -> List[Dict]:
-        return [{"id": "lang-001", "name": "English", "state": "active"},
-                {"id": "lang-002", "name": "Spanish", "state": "active"}]
+        return [
+            {"id": "lang-001", "name": "English", "state": "active"},
+            {"id": "lang-002", "name": "Spanish", "state": "active"},
+        ]
 
     def get_wrapup_codes(self) -> List[Dict]:
-        return [{"id": "wc-001", "name": "Resolved", "state": "active"},
-                {"id": "wc-002", "name": "Follow-up Required", "state": "active"},
-                {"id": "wc-003", "name": "Escalated", "state": "active"}]
+        return [
+            {"id": "wc-001", "name": "Resolved", "state": "active"},
+            {"id": "wc-002", "name": "Follow-up Required", "state": "active"},
+            {"id": "wc-003", "name": "Escalated", "state": "active"},
+        ]
 
     def get_user_skills(self, user_id: str) -> List[Dict]:
         return DEMO_USER_SKILLS.get(user_id, [])
 
-    def add_user_skill(self, user_id: str, skill_id: str, proficiency: float = 1.0) -> MockAPIResponse:
+    def add_user_skill(
+        self, user_id: str, skill_id: str, proficiency: float = 1.0
+    ) -> MockAPIResponse:
         assignments = DEMO_USER_SKILLS.setdefault(user_id, [])
         skill = next((s for s in DEMO_SKILLS if s["id"] == skill_id), None)
         if skill:
             if not any(s["id"] == skill_id for s in assignments):
-                assignments.append({
-                    "id": skill_id,
-                    "name": skill["name"],
-                    "state": skill.get("state", "active"),
-                    "proficiency": proficiency,
-                })
+                assignments.append(
+                    {
+                        "id": skill_id,
+                        "name": skill["name"],
+                        "state": skill.get("state", "active"),
+                        "proficiency": proficiency,
+                    }
+                )
         return MockAPIResponse(success=True, data={"id": skill_id}, status_code=200)
 
     def remove_user_skill(self, user_id: str, skill_id: str) -> MockAPIResponse:
@@ -491,7 +602,12 @@ class DemoRoutingAPI:
 
     def create_skill(self, name: str, description: str, state: str) -> MockAPIResponse:
         skill_id = f"skill-{uuid.uuid4().hex[:6]}"
-        skill = {"id": skill_id, "name": name, "description": description, "state": state}
+        skill = {
+            "id": skill_id,
+            "name": name,
+            "description": description,
+            "state": state,
+        }
         DEMO_SKILLS.append(skill)
         return MockAPIResponse(success=True, data=skill, status_code=200)
 
@@ -514,13 +630,19 @@ class DemoConversationsAPI:
     """Mock Conversations API."""
 
     def get(self, conversation_id: str) -> MockAPIResponse:
-        return MockAPIResponse(success=False, error="Not available in demo mode", status_code=501)
+        return MockAPIResponse(
+            success=False, error="Not available in demo mode", status_code=501
+        )
 
     def get_details(self, conversation_id: str) -> MockAPIResponse:
-        return MockAPIResponse(success=False, error="Not available in demo mode", status_code=501)
+        return MockAPIResponse(
+            success=False, error="Not available in demo mode", status_code=501
+        )
 
     def disconnect(self, conversation_id: str) -> MockAPIResponse:
-        return MockAPIResponse(success=False, error="Not available in demo mode", status_code=501)
+        return MockAPIResponse(
+            success=False, error="Not available in demo mode", status_code=501
+        )
 
     def query(self, interval: str, filters=None, page_size=100) -> List[Dict]:
         return []

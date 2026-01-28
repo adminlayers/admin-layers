@@ -2,11 +2,10 @@
 Configuration management for Genesys Cloud utilities.
 """
 
-import os
 import json
-from typing import Optional, Dict
+import os
 from dataclasses import dataclass
-
+from typing import Dict, Optional
 
 # Genesys Cloud regions
 REGIONS = {
@@ -28,6 +27,7 @@ REGIONS = {
 @dataclass
 class GenesysConfig:
     """Genesys Cloud configuration."""
+
     client_id: str
     client_secret: str
     region: str = "mypurecloud.com"
@@ -48,8 +48,7 @@ def get_regions() -> list[str]:
 
 
 def load_config(
-    config_path: str = "config.json",
-    env_prefix: str = "GENESYS"
+    config_path: str = "config.json", env_prefix: str = "GENESYS"
 ) -> Optional[GenesysConfig]:
     """
     Load Genesys Cloud configuration.
@@ -67,21 +66,22 @@ def load_config(
         GenesysConfig if credentials found, None otherwise
     """
     # Try environment variables first
-    client_id = os.environ.get(f'{env_prefix}_CLIENT_ID')
-    client_secret = os.environ.get(f'{env_prefix}_CLIENT_SECRET')
-    region = os.environ.get(f'{env_prefix}_REGION', 'mypurecloud.com')
+    client_id = os.environ.get(f"{env_prefix}_CLIENT_ID")
+    client_secret = os.environ.get(f"{env_prefix}_CLIENT_SECRET")
+    region = os.environ.get(f"{env_prefix}_REGION", "mypurecloud.com")
 
     if client_id and client_secret:
         return GenesysConfig(
             client_id=client_id,
             client_secret=client_secret,
             region=region,
-            source='environment'
+            source="environment",
         )
 
     # Try Streamlit secrets (for Community Cloud deployment)
     try:
         import streamlit as st
+
         genesys_secrets = st.secrets.get("genesys", {})
         if genesys_secrets:
             s_client_id = genesys_secrets.get("client_id")
@@ -91,20 +91,20 @@ def load_config(
                     client_id=s_client_id,
                     client_secret=s_client_secret,
                     region=genesys_secrets.get("region", "mypurecloud.com"),
-                    source='streamlit_secrets'
+                    source="streamlit_secrets",
                 )
     except (ImportError, FileNotFoundError, KeyError, AttributeError):
         pass
 
     # Fall back to config file
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             data = json.load(f)
             return GenesysConfig(
-                client_id=data['client_id'],
-                client_secret=data['client_secret'],
-                region=data.get('region', 'mypurecloud.com'),
-                source='file'
+                client_id=data["client_id"],
+                client_secret=data["client_secret"],
+                region=data.get("region", "mypurecloud.com"),
+                source="file",
             )
     except (FileNotFoundError, KeyError, json.JSONDecodeError):
         return None
@@ -122,12 +122,16 @@ def save_config(config: GenesysConfig, config_path: str = "config.json") -> bool
         True if successful
     """
     try:
-        with open(config_path, 'w') as f:
-            json.dump({
-                'client_id': config.client_id,
-                'client_secret': config.client_secret,
-                'region': config.region
-            }, f, indent=2)
+        with open(config_path, "w") as f:
+            json.dump(
+                {
+                    "client_id": config.client_id,
+                    "client_secret": config.client_secret,
+                    "region": config.region,
+                },
+                f,
+                indent=2,
+            )
         return True
     except Exception:
         return False
