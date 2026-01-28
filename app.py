@@ -12,6 +12,11 @@ from typing import Dict, Type
 from genesys_cloud import GenesysAuth, GenesysCloudAPI, load_config, get_regions
 from core.encrypted_storage import get_storage
 from core.demo import DemoAPI, is_demo_mode, set_demo_mode
+from core.diagnostics import (
+    run_diagnostics, get_cached_report, cache_report, clear_cached_report,
+    render_diagnostics_summary,
+)
+from core.services import validate_backend
 
 # Utilities
 from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, QueueManagerUtility, UserManagerUtility
@@ -56,28 +61,47 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Hamburger menu button — hide default icon text, show clean toggle */
+    /* Hamburger menu button — hide ALL default content, show clean toggle */
     [data-testid="collapsedControl"] {
         overflow: hidden !important;
-        width: 2.2rem;
-        height: 2.2rem;
-        max-width: 2.5rem;
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        max-width: 2.5rem !important;
+        min-width: 2.5rem !important;
         border-radius: 0.5rem;
-        background: rgba(15, 23, 42, 0.7);
+        background: rgba(15, 23, 42, 0.85) !important;
         font-size: 0 !important;
-        line-height: 2.2rem;
-        text-align: center;
+        line-height: 0 !important;
+        text-indent: -9999px !important;
+        color: transparent !important;
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0 !important;
+        z-index: 1100 !important;
     }
-    [data-testid="collapsedControl"] span,
-    [data-testid="collapsedControl"] div,
-    [data-testid="collapsedControl"] svg {
+    [data-testid="collapsedControl"] * {
         display: none !important;
         font-size: 0 !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
     }
     [data-testid="collapsedControl"]::after {
-        content: "\\2630";
-        font-size: 1.1rem;
+        content: "\2630";
+        font-size: 1.3rem;
         color: #e2e8f0;
+        text-indent: 0 !important;
+        display: block !important;
+        visibility: visible !important;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: auto !important;
+        height: auto !important;
     }
 
     /* Fix expander arrow icon text */
@@ -205,6 +229,7 @@ st.markdown("""
         .block-container {
             padding-left: var(--mobile-padding);
             padding-right: var(--mobile-padding);
+            padding-top: 3rem;
         }
 
         /* Sidebar: full-screen overlay on mobile */
@@ -212,14 +237,17 @@ st.markdown("""
             position: fixed !important;
             top: 0;
             left: 0;
-            width: 100% !important;
-            min-width: 100% !important;
-            max-width: 100% !important;
+            width: 85% !important;
+            min-width: 85% !important;
+            max-width: 85% !important;
             height: 100vh !important;
             z-index: 1000;
             background-color: #1a2632;
             transform: translateX(-100%);
-            transition: transform 0.2s ease;
+            transition: transform 0.25s ease;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
         }
 
         section[data-testid="stSidebar"][aria-expanded="true"] {
@@ -235,11 +263,23 @@ st.markdown("""
         [data-testid="stSidebar"] .block-container {
             padding-left: var(--mobile-padding);
             padding-right: var(--mobile-padding);
+            padding-top: 1rem;
         }
 
         [data-testid="stSidebar"] button {
-            padding: 0.3rem 0.45rem;
-            font-size: 0.78rem;
+            padding: 0.5rem 0.6rem;
+            font-size: 0.85rem;
+            min-height: 2.5rem;
+        }
+
+        /* Bigger touch targets on mobile */
+        [data-testid="stSidebar"] .stButton + .stButton {
+            margin-top: 0.3rem;
+        }
+
+        /* Ensure action bar columns don't get too cramped */
+        [data-testid="stHorizontalBlock"] {
+            gap: 0.3rem;
         }
     }
 </style>
@@ -269,6 +309,19 @@ def init_session_state():
         st.session_state.local_user = storage.retrieve_local_user()
 
 
+def _run_startup_diagnostics(api, is_demo: bool = False):
+    """Run diagnostics after authentication and cache the report."""
+    # Validate backend interface
+    errors = validate_backend(api)
+    if errors:
+        st.warning(f"Backend missing methods: {', '.join(errors[:5])}")
+
+    # Run endpoint checks
+    report = run_diagnostics(api, is_demo=is_demo)
+    cache_report(report)
+    return report
+
+
 def try_auto_auth():
     """Attempt auto-authentication from environment or encrypted storage."""
     if st.session_state.authenticated:
@@ -282,6 +335,7 @@ def try_auto_auth():
             st.session_state.authenticated = True
             st.session_state.auth = auth
             st.session_state.api = GenesysCloudAPI(auth)
+            _run_startup_diagnostics(st.session_state.api, is_demo=False)
             return
 
     # Try encrypted storage
@@ -298,6 +352,7 @@ def try_auto_auth():
             st.session_state.authenticated = True
             st.session_state.auth = auth
             st.session_state.api = GenesysCloudAPI(auth)
+            _run_startup_diagnostics(st.session_state.api, is_demo=False)
 
 
 def activate_demo_mode():
@@ -306,6 +361,7 @@ def activate_demo_mode():
     st.session_state.authenticated = True
     st.session_state.auth = None
     st.session_state.api = DemoAPI()
+    _run_startup_diagnostics(st.session_state.api, is_demo=True)
 
 
 def deactivate_session():
@@ -316,6 +372,7 @@ def deactivate_session():
     st.session_state.api = None
     st.session_state.current_utility = None
     st.session_state.page = 'home'
+    clear_cached_report()
 
 
 # =============================================================================
@@ -503,15 +560,42 @@ and encrypted local storage.
 
     st.markdown("Select a utility from the sidebar to begin.")
 
+    # Diagnostics summary
+    report = get_cached_report()
+    if report:
+        render_diagnostics_summary(report)
+    else:
+        # Run diagnostics if not cached yet
+        if st.session_state.api:
+            with st.spinner("Running endpoint diagnostics..."):
+                report = _run_startup_diagnostics(
+                    st.session_state.api,
+                    is_demo=is_demo_mode()
+                )
+            render_diagnostics_summary(report)
+
+    c_diag, _ = st.columns([1, 3])
+    with c_diag:
+        if st.button("Re-run Diagnostics", key="home_rerun_diag"):
+            if st.session_state.api:
+                with st.spinner("Running diagnostics..."):
+                    report = _run_startup_diagnostics(
+                        st.session_state.api,
+                        is_demo=is_demo_mode()
+                    )
+                st.rerun()
+
+    st.markdown("---")
+
     # Show utility cards
     st.markdown("### Available Utilities")
 
-    cols = st.columns(3)
+    cols = st.columns(2)
 
     for i, (util_id, util_class) in enumerate(UTILITIES.items()):
         config = util_class.get_config()
 
-        with cols[i % 3]:
+        with cols[i % 2]:
             with st.container():
                 st.markdown(f"#### {config.icon} {config.name}")
                 st.caption(config.description)
@@ -617,6 +701,7 @@ def page_connect():
                         st.session_state.authenticated = True
                         st.session_state.auth = auth
                         st.session_state.api = GenesysCloudAPI(auth)
+                        _run_startup_diagnostics(st.session_state.api, is_demo=False)
                         st.session_state.page = 'home'
                         st.rerun()
                     else:
