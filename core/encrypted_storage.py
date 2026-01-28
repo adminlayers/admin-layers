@@ -2,9 +2,9 @@
 Encrypted Storage Module
 Provides encrypted local storage for credentials, session data, and action history.
 
-Works in both local and hosted environments:
+Works in both local and hosted (Streamlit Community Cloud) environments:
 - Local: Encrypts data on disk at ~/.admin_layers/
-- Hosted: Encrypts data in memory with key from environment or auto-generated
+- Hosted: Encrypts data in session state with key from st.secrets or auto-generated
 
 All sensitive data (credentials, tokens, history) is encrypted at rest using
 Fernet symmetric encryption (AES-128-CBC with HMAC-SHA256).
@@ -19,12 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import streamlit as st
 from cryptography.fernet import Fernet, InvalidToken
-
-
-# Module-level in-memory store (replaces session state)
-_memory_store: Dict[str, str] = {}
-_session_key: Optional[str] = None
 
 
 class EncryptedStorage:
@@ -32,12 +28,13 @@ class EncryptedStorage:
     Encrypted key-value storage for sensitive data.
 
     Encryption key priority:
-    1. ADMIN_LAYERS_KEY environment variable
-    2. Auto-generated per-process key (stored in module variable)
+    1. st.secrets["encryption_key"] (for Streamlit Community Cloud)
+    2. ADMIN_LAYERS_KEY environment variable
+    3. Auto-generated per-session key (stored in session state)
 
     Storage backend priority:
     1. Local filesystem (~/.admin_layers/) when writable
-    2. In-memory store (for hosted/ephemeral environments)
+    2. Session state (for hosted/ephemeral environments)
     """
 
     def __init__(self):
@@ -48,19 +45,27 @@ class EncryptedStorage:
 
     def _init_encryption(self) -> None:
         """Initialize the encryption key."""
-        global _session_key
         key = None
 
-        # 1. Try environment variable
-        env_key = os.environ.get("ADMIN_LAYERS_KEY")
-        if env_key:
-            key = self._derive_key(env_key)
+        # 1. Try st.secrets
+        try:
+            secret_key = st.secrets.get("encryption_key")
+            if secret_key:
+                key = self._derive_key(secret_key)
+        except (FileNotFoundError, KeyError, AttributeError):
+            pass
 
-        # 2. Auto-generate per-process key
+        # 2. Try environment variable
         if key is None:
-            if _session_key is None:
-                _session_key = Fernet.generate_key().decode()
-            key = _session_key.encode()
+            env_key = os.environ.get("ADMIN_LAYERS_KEY")
+            if env_key:
+                key = self._derive_key(env_key)
+
+        # 3. Auto-generate per-session key
+        if key is None:
+            if "_encryption_key" not in st.session_state:
+                st.session_state._encryption_key = Fernet.generate_key().decode()
+            key = st.session_state._encryption_key.encode()
 
         self._fernet = Fernet(key)
 
@@ -71,26 +76,37 @@ class EncryptedStorage:
 
     def _init_storage_dir(self) -> None:
         """Initialize local storage directory if available."""
+        # Try home directory first
         try:
             storage_dir = os.path.join(Path.home(), '.admin_layers')
             os.makedirs(storage_dir, exist_ok=True)
+            # Test write access
             test_file = os.path.join(storage_dir, '.write_test')
             with open(test_file, 'w') as f:
                 f.write('test')
             os.remove(test_file)
             self._storage_dir = storage_dir
         except (OSError, PermissionError):
+            # Fall back to temp directory
             try:
                 storage_dir = os.path.join(tempfile.gettempdir(), '.admin_layers')
                 os.makedirs(storage_dir, exist_ok=True)
                 self._storage_dir = storage_dir
             except (OSError, PermissionError):
+                # No filesystem access - use session state only
                 self._storage_dir = None
 
     @property
     def is_persistent(self) -> bool:
         """Whether storage persists across sessions."""
-        has_stable_key = bool(os.environ.get("ADMIN_LAYERS_KEY"))
+        # Persistent if using file storage with a stable key (not auto-generated)
+        has_stable_key = False
+        try:
+            has_stable_key = bool(st.secrets.get("encryption_key"))
+        except (FileNotFoundError, KeyError, AttributeError):
+            pass
+        if not has_stable_key:
+            has_stable_key = bool(os.environ.get("ADMIN_LAYERS_KEY"))
         return self._storage_dir is not None and has_stable_key
 
     def encrypt(self, data: str) -> str:
@@ -105,13 +121,24 @@ class EncryptedStorage:
             return None
 
     def store(self, key: str, value: Any) -> bool:
-        """Store a value with encryption."""
+        """
+        Store a value with encryption.
+
+        Args:
+            key: Storage key
+            value: Value to store (will be JSON-serialized then encrypted)
+
+        Returns:
+            True if stored successfully
+        """
         try:
             json_data = json.dumps(value, default=str)
             encrypted = self.encrypt(json_data)
 
-            # Store in memory
-            _memory_store[key] = encrypted
+            # Store in session state (always)
+            if "_encrypted_store" not in st.session_state:
+                st.session_state._encrypted_store = {}
+            st.session_state._encrypted_store[key] = encrypted
 
             # Also persist to file if available
             if self._storage_dir:
@@ -124,11 +151,20 @@ class EncryptedStorage:
             return False
 
     def retrieve(self, key: str) -> Optional[Any]:
-        """Retrieve and decrypt a stored value."""
+        """
+        Retrieve and decrypt a stored value.
+
+        Args:
+            key: Storage key
+
+        Returns:
+            Decrypted value or None if not found/decryption fails
+        """
         encrypted = None
 
-        # Try memory first
-        encrypted = _memory_store.get(key)
+        # Try session state first (fastest)
+        store = st.session_state.get("_encrypted_store", {})
+        encrypted = store.get(key)
 
         # Fall back to file storage
         if encrypted is None and self._storage_dir:
@@ -155,7 +191,8 @@ class EncryptedStorage:
     def delete(self, key: str) -> bool:
         """Delete a stored value."""
         try:
-            _memory_store.pop(key, None)
+            store = st.session_state.get("_encrypted_store", {})
+            store.pop(key, None)
 
             if self._storage_dir:
                 file_path = os.path.join(self._storage_dir, f"{key}.enc")
@@ -217,13 +254,23 @@ class EncryptedStorage:
 
     def get_storage_info(self) -> Dict[str, Any]:
         """Get storage configuration info for display."""
+        has_secrets_key = False
+        try:
+            has_secrets_key = bool(st.secrets.get("encryption_key"))
+        except (FileNotFoundError, KeyError, AttributeError):
+            pass
+
         has_env_key = bool(os.environ.get("ADMIN_LAYERS_KEY"))
 
         return {
-            "backend": "filesystem" if self._storage_dir else "memory",
+            "backend": "filesystem" if self._storage_dir else "session_state",
             "storage_dir": self._storage_dir,
             "persistent": self.is_persistent,
-            "key_source": "environment" if has_env_key else "process (auto-generated)",
+            "key_source": (
+                "st.secrets" if has_secrets_key
+                else "environment" if has_env_key
+                else "session (auto-generated)"
+            ),
             "encryption": "Fernet (AES-128-CBC + HMAC-SHA256)",
         }
 

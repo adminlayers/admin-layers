@@ -1,12 +1,11 @@
 """
 Group Manager Utility
 Manage group membership in Genesys Cloud.
-NiceGUI/Quasar implementation with clickable tables.
 """
 
-from typing import Dict, List
-
-from nicegui import ui
+import streamlit as st
+import pandas as pd
+from typing import List, Dict
 
 from .base import BaseUtility, UtilityConfig
 
@@ -19,45 +18,50 @@ class GroupManagerUtility(BaseUtility):
             id="group_manager",
             name="Group Manager",
             description="View and manage group membership",
-            icon="group",
+            icon="\U0001F465",
             category="Users & Groups",
             requires_group=True,
-            tags=["groups", "users", "membership", "bulk"],
+            tags=["groups", "users", "membership", "bulk"]
         )
 
     def init_state(self) -> None:
         for key, default in [('page', 'list'), ('group_id', ''),
                              ('group_info', None), ('members', []),
+                             ('all_groups', None),
                              ('list_page_size', 25), ('list_page_number', 1)]:
             if self.get_state(key) is None:
                 self.set_state(key, default)
 
     def render_sidebar(self) -> None:
+        st.markdown("#### Group Manager")
         group_info = self.get_state('group_info')
         if group_info:
-            ui.label(f"Selected: {group_info.get('name', '')}").classes(
-                'text-caption text-grey-6 q-px-md')
-
-        self.nav_button('All Groups', 'list', icon='list')
-        self.nav_button('Create Group', 'create', icon='add')
-
+            st.caption(f"Selected: **{group_info.get('name', '')}**")
+        pages = [
+            ("gm_nav_list", "\U0001F4CB All Groups", "list"),
+            ("gm_nav_create", "\U00002795 Create Group", "create"),
+        ]
         if group_info:
-            self.nav_button('Members', 'detail', icon='group')
-            self.nav_button('Add Members', 'add', icon='person_add')
-            self.nav_button('Remove Members', 'remove', icon='person_remove')
-            self.nav_button('Edit Group', 'edit', icon='edit')
-            self.nav_button('Delete Group', 'delete', icon='delete')
-            self.nav_button('Export', 'export', icon='download')
+            pages += [
+                ("gm_nav_detail", "\U0001F465 Members", "detail"),
+                ("gm_nav_add", "\U00002795 Add Members", "add"),
+                ("gm_nav_remove", "\U00002796 Remove Members", "remove"),
+                ("gm_nav_edit", "\U0000270F\ufe0f Edit Group", "edit"),
+                ("gm_nav_delete", "\U0001F5D1\ufe0f Delete Group", "delete"),
+                ("gm_nav_export", "\U0001F4E5 Export", "export"),
+            ]
+        for key, label, page in pages:
+            if st.button(label, use_container_width=True, key=key):
+                self.set_state('page', page)
+                st.rerun()
 
     def render_main(self) -> None:
         self.init_state()
         page = self.get_state('page', 'list')
-        {
-            'list': self._page_list, 'detail': self._page_detail,
-            'add': self._page_add, 'remove': self._page_remove,
-            'export': self._page_export, 'create': self._page_create,
-            'edit': self._page_edit, 'delete': self._page_delete,
-        }.get(page, self._page_list)()
+        {'list': self._page_list, 'detail': self._page_detail,
+         'add': self._page_add, 'remove': self._page_remove,
+         'export': self._page_export, 'create': self._page_create,
+         'edit': self._page_edit, 'delete': self._page_delete}.get(page, self._page_list)()
 
     # -- helpers --
 
@@ -70,52 +74,74 @@ class GroupManagerUtility(BaseUtility):
             self.set_state('group_info', resp.data)
             self.set_state('members', self.api.groups.get_members(group_id))
             self.set_state('page', 'detail')
-            self._refresh()
         else:
-            ui.notify(f'Failed to load group: {resp.error}', type='negative')
+            st.error(f"Failed to load group: {resp.error}")
 
     def _refresh_members(self) -> None:
         gid = self.get_state('group_id')
         if gid:
             self.set_state('members', self.api.groups.get_members(gid))
 
+    def _action_bar(self) -> None:
+        info = self.get_state('group_info')
+        if not info:
+            return
+        c1, c2, c3, c4, c5 = st.columns(5)
+        if c1.button("+ Add", use_container_width=True, key="gm_ab_add"):
+            self.set_state('page', 'add')
+            st.rerun()
+        if c2.button("- Remove", use_container_width=True, key="gm_ab_rm"):
+            self.set_state('page', 'remove')
+            st.rerun()
+        if c3.button("Export", use_container_width=True, key="gm_ab_exp"):
+            self.set_state('page', 'export')
+            st.rerun()
+        if c4.button("Edit", use_container_width=True, key="gm_ab_edit"):
+            self.set_state('page', 'edit')
+            st.rerun()
+        if c5.button("Refresh", use_container_width=True, key="gm_ab_ref"):
+            self._refresh_members()
+            st.rerun()
+
     def _group_header(self) -> None:
         info = self.get_state('group_info')
         members = self.get_state('members', [])
-        self.back_button('Back to Groups')
-        self.section_title(
-            info.get('name', 'Group'),
-            f"{len(members)} members | {info.get('type', 'N/A')} | {info.get('visibility', 'N/A')}"
-        )
+        if st.button("< Back to Groups", key="gm_back"):
+            self.set_state('page', 'list')
+            st.rerun()
+        st.markdown(f"### {info.get('name', 'Group')}")
         desc = info.get('description', '')
+        meta = f"**{len(members)}** members · {info.get('type', 'N/A')} · {info.get('visibility', 'N/A')}"
         if desc:
-            ui.label(desc).classes('text-caption text-grey-6')
-
-        with ui.row().classes('q-gutter-sm q-my-sm'):
-            ui.button('Add', icon='person_add',
-                      on_click=lambda: self.navigate('add')).props('flat dense no-caps')
-            ui.button('Remove', icon='person_remove',
-                      on_click=lambda: self.navigate('remove')).props('flat dense no-caps')
-            ui.button('Export', icon='download',
-                      on_click=lambda: self.navigate('export')).props('flat dense no-caps')
-            ui.button('Edit', icon='edit',
-                      on_click=lambda: self.navigate('edit')).props('flat dense no-caps')
-            ui.button('Refresh', icon='refresh', on_click=lambda: (
-                self._refresh_members(), self._refresh()
-            )).props('flat dense no-caps')
-        ui.separator()
+            meta += f" · {desc}"
+        st.markdown(meta)
+        self._action_bar()
+        st.markdown("---")
 
     # -- pages --
 
     def _page_list(self) -> None:
-        self.section_title('Groups')
-
+        st.markdown("## Groups")
         page_size = self.get_state('list_page_size', 25)
         page_number = self.get_state('list_page_number', 1)
 
-        resp = self.api.groups.list_page(page_size=page_size, page_number=page_number)
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            page_size = st.selectbox(
+                "Rows per page",
+                [25, 50, 100],
+                index=[25, 50, 100].index(page_size),
+                key="gm_page_size",
+            )
+            self.set_state('list_page_size', page_size)
+        with c2:
+            page_number = int(st.number_input("Page", min_value=1, value=page_number, step=1, key="gm_page_num"))
+            self.set_state('list_page_number', page_number)
+
+        with st.spinner("Loading groups..."):
+            resp = self.api.groups.list_page(page_size=page_size, page_number=page_number)
         if not resp.success:
-            ui.notify(f'Failed to load groups: {resp.error}', type='negative')
+            st.error(f"Failed to load groups: {resp.error}")
             return
 
         data = resp.data or {}
@@ -123,319 +149,296 @@ class GroupManagerUtility(BaseUtility):
         total = data.get('total', len(all_groups))
         page_count = data.get('pageCount', 1)
 
+        if page_number > page_count:
+            self.set_state('list_page_number', page_count)
+            st.rerun()
+
         if not all_groups:
-            ui.label('No groups found in your org.').classes('text-grey-6')
+            st.info("No groups found in your org.")
             return
 
-        ui.label(f'Showing {len(all_groups)} of {total} groups (Page {page_number} of {page_count})').classes(
-            'text-caption text-grey-6')
+        search = st.text_input("Search", placeholder="Filter by name...",
+                               key="gm_list_search", label_visibility="collapsed")
 
-        columns = [
-            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
-            {'name': 'members', 'label': 'Members', 'field': 'members', 'sortable': True},
-            {'name': 'type', 'label': 'Type', 'field': 'type', 'sortable': True},
-            {'name': 'visibility', 'label': 'Visibility', 'field': 'visibility', 'sortable': True},
-        ]
-        rows = [{
-            'id': g.get('id', ''),
-            'name': g.get('name', ''),
-            'members': g.get('memberCount', 0),
-            'type': g.get('type', ''),
-            'visibility': g.get('visibility', ''),
-        } for g in all_groups]
+        df = pd.DataFrame([{
+            'Name': g.get('name', ''),
+            'Members': g.get('memberCount', 0),
+            'Type': g.get('type', ''),
+            'Visibility': g.get('visibility', ''),
+            'ID': g.get('id', ''),
+        } for g in all_groups])
 
-        self.make_table(
-            columns, rows,
-            on_row_click=lambda row: self._load_group(row['id']),
-            title='Click a row to open',
-        )
+        if search and not df.empty:
+            df = df[df['Name'].str.contains(search, case=False, na=False)]
 
-        with ui.row().classes('q-gutter-sm q-mt-md items-center'):
-            ui.button('Prev', icon='chevron_left',
-                      on_click=lambda: self._change_page(page_number - 1)).props(
-                'flat dense no-caps').set_enabled(page_number > 1)
-            ui.label(f'Page {page_number} of {page_count}').classes('text-body2')
-            ui.button('Next', icon='chevron_right',
-                      on_click=lambda: self._change_page(page_number + 1)).props(
-                'flat dense no-caps').set_enabled(page_number < page_count)
+        st.caption(f"Showing {len(df)} of {total} groups (Page {page_number} of {page_count})")
+        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
-    def _change_page(self, page: int) -> None:
-        self.set_state('list_page_number', page)
-        self._refresh()
+        st.markdown("---")
+        st.markdown("##### Open a group")
+        filtered = all_groups
+        if search:
+            sl = search.lower()
+            filtered = [g for g in all_groups if sl in g.get('name', '').lower()]
+        options = {g.get('name', '?'): g.get('id') for g in filtered}
+        if options:
+            chosen = st.selectbox("Select group", list(options.keys()), key="gm_list_pick",
+                                  label_visibility="collapsed")
+            if st.button("Open", type="primary", key="gm_list_open"):
+                with st.spinner("Loading..."):
+                    self._load_group(options[chosen])
+                    st.rerun()
 
     def _page_create(self) -> None:
-        self.section_title('Create Group')
-        ui.label('Creating a group affects your org immediately.').classes(
-            'text-caption text-amber')
+        st.markdown("## Create Group")
+        st.warning("Creating a group affects your org immediately. Confirm before creating.")
 
-        name = ui.input('Name', placeholder='Group name').classes('w-full')
-        description = ui.textarea('Description', placeholder='Group description').classes('w-full')
-        group_type = ui.select(['official', 'custom'], value='official', label='Type').classes('w-full')
-        visibility = ui.select(['public', 'members'], value='public', label='Visibility').classes('w-full')
-        confirm = ui.checkbox('I confirm I want to create this group')
+        with st.form("gm_create_form"):
+            name = st.text_input("Name", placeholder="Group name")
+            description = st.text_area("Description", placeholder="Group description")
+            group_type = st.selectbox("Type", ["official", "custom"], index=0)
+            visibility = st.selectbox("Visibility", ["public", "members"], index=0)
+            confirm = st.checkbox("I confirm I want to create this group")
+            submitted = st.form_submit_button("Create Group", use_container_width=True)
 
-        def do_create():
-            if not confirm.value:
-                ui.notify('Confirmation required', type='warning')
+        if submitted:
+            if not confirm:
+                st.error("Confirmation required before creating a group.")
                 return
-            if not name.value:
-                ui.notify('Group name is required', type='warning')
+            if not name:
+                st.error("Group name is required.")
                 return
-            resp = self.api.groups.create(
-                name=name.value, description=description.value,
-                group_type=group_type.value, visibility=visibility.value)
+            resp = self.api.groups.create(name=name, description=description, group_type=group_type, visibility=visibility)
             if resp.success:
-                ui.notify('Group created', type='positive')
+                st.success("Group created.")
                 self.set_state('group_id', resp.data.get('id'))
                 self.set_state('group_info', resp.data)
-                self.navigate('detail')
+                self.set_state('page', 'detail')
+                st.rerun()
             else:
-                ui.notify(f'Failed: {resp.error}', type='negative')
-
-        ui.button('Create Group', icon='add', on_click=do_create).props(
-            'color=primary no-caps').classes('q-mt-md')
+                st.error(f"Failed to create group: {resp.error}")
 
     def _page_edit(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
-        self.section_title('Edit Group')
+        st.markdown("### Edit Group")
 
-        name = ui.input('Name', value=info.get('name', '')).classes('w-full')
-        description = ui.textarea('Description', value=info.get('description', '')).classes('w-full')
-        visibility = ui.select(
-            ['public', 'members'],
-            value=info.get('visibility', 'public'),
-            label='Visibility',
-        ).classes('w-full')
+        with st.form("gm_edit_form"):
+            name = st.text_input("Name", value=info.get('name', ''))
+            description = st.text_area("Description", value=info.get('description', ''))
+            visibility = st.selectbox(
+                "Visibility",
+                ["public", "members"],
+                index=0 if info.get("visibility", "public") == "public" else 1,
+            )
+            submitted = st.form_submit_button("Save Changes", use_container_width=True)
 
-        def do_save():
-            payload = {'name': name.value, 'description': description.value, 'visibility': visibility.value}
+        if submitted:
+            payload = {"name": name, "description": description, "visibility": visibility}
             resp = self.api.groups.update(info.get('id'), payload)
             if resp.success:
-                ui.notify('Group updated', type='positive')
+                st.success("Group updated.")
                 self._load_group(info.get('id'))
+                st.rerun()
             else:
-                ui.notify(f'Failed: {resp.error}', type='negative')
-
-        ui.button('Save Changes', icon='save', on_click=do_save).props(
-            'color=primary no-caps').classes('q-mt-md')
+                st.error(f"Failed to update group: {resp.error}")
 
     def _page_delete(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
-        self.section_title('Delete Group')
-        ui.label('Deleting a group is permanent.').classes('text-caption text-amber')
-        confirm = ui.checkbox('I understand this will delete the group')
-
-        def do_delete():
-            if not confirm.value:
-                ui.notify('Confirmation required', type='warning')
-                return
+        st.markdown("### Delete Group")
+        st.warning("Deleting a group is permanent. This action requires confirmation.")
+        confirm = st.checkbox("I understand this will delete the group", key="gm_delete_confirm")
+        if st.button("Delete Group", type="primary", disabled=not confirm, key="gm_delete_btn"):
             resp = self.api.groups.delete(info.get('id'))
             if resp.success:
-                ui.notify('Group deleted', type='positive')
+                st.success("Group deleted.")
                 self.set_state('group_info', None)
                 self.set_state('group_id', '')
-                self.navigate('list')
+                self.set_state('page', 'list')
+                st.rerun()
             else:
-                ui.notify(f'Failed: {resp.error}', type='negative')
-
-        ui.button('Delete Group', icon='delete', on_click=do_delete).props(
-            'color=red no-caps').classes('q-mt-md')
+                st.error(f"Failed to delete group: {resp.error}")
 
     def _page_detail(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
 
         members = self.get_state('members', [])
+        search = st.text_input("Filter members", placeholder="Name or email...", key="gm_det_filter")
+
         if not members:
-            ui.label('This group has no members.').classes('text-grey-6')
+            st.info("This group has no members.")
             return
 
-        columns = [
-            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
-            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
-            {'name': 'department', 'label': 'Department', 'field': 'department', 'sortable': True},
-        ]
-        rows = [{
-            'id': m.get('id', ''),
-            'name': m.get('name', ''),
-            'email': m.get('email', ''),
-            'department': m.get('department', ''),
-        } for m in members]
+        df = pd.DataFrame([{
+            'Name': m.get('name', ''),
+            'Email': m.get('email', ''),
+            'Department': m.get('department', ''),
+            'ID': m.get('id', ''),
+        } for m in members])
 
-        self.make_table(columns, rows, title=f'{len(members)} members')
+        if search and not df.empty:
+            mask = (df['Name'].str.contains(search, case=False, na=False) |
+                    df['Email'].str.contains(search, case=False, na=False))
+            df = df[mask]
+
+        st.dataframe(df, use_container_width=True, hide_index=True, height=min(500, 35 * len(df) + 38))
 
     def _page_add(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
-        self.section_title('Add Members')
+        st.markdown("### Add Members")
 
-        emails_input = ui.textarea(
-            'Emails (one per line)',
-            placeholder='alice@company.com\nbob@company.com',
-        ).classes('w-full').style('min-height:150px')
+        tab1, tab2 = st.tabs(["Paste Emails", "Upload File"])
+        emails_text = ""
+        with tab1:
+            emails_text = st.text_area(
+                "Emails (one per line)", height=180,
+                placeholder="alice@company.com\nbob@company.com", key="gm_paste"
+            )
+        with tab2:
+            uploaded = st.file_uploader("CSV or TXT file", type=['csv', 'txt'], key="gm_upload")
+            if uploaded:
+                content = uploaded.read().decode('utf-8')
+                emails_text = "\n".join(
+                    line.split(',')[0].strip().strip('"')
+                    for line in content.split('\n') if '@' in line
+                )
+                st.code(emails_text, language=None)
 
-        dry_run = ui.checkbox('Preview only (dry run)', value=True)
+        c1, c2 = st.columns(2)
+        dry_run = c1.checkbox("Preview only (dry run)", value=True, key="gm_dryrun")
+        run = c2.button("Process", type="primary", use_container_width=True, key="gm_run_add")
 
-        def do_process():
-            self._execute_add(emails_input.value or '', dry_run.value)
-
-        ui.button('Process', icon='play_arrow', on_click=do_process).props(
-            'color=primary no-caps').classes('q-mt-sm')
+        if run and emails_text:
+            self._execute_add(emails_text, dry_run)
 
     def _execute_add(self, raw: str, dry_run: bool) -> None:
         emails = list(dict.fromkeys(
             e.strip() for e in raw.split('\n') if e.strip() and '@' in e
         ))
         if not emails:
-            ui.notify('No valid email addresses found', type='warning')
+            st.error("No valid email addresses found.")
             return
 
+        st.markdown("---")
+        progress = st.progress(0)
         found, missing = [], []
-        for email in emails:
+        for i, email in enumerate(emails):
+            progress.progress((i + 1) / len(emails))
             user = self.api.users.search_by_email(email)
             if user:
                 found.append({'id': user['id'], 'name': user.get('name', ''), 'email': email})
             else:
                 missing.append(email)
+        progress.empty()
 
-        ui.notify(f'{len(found)} found, {len(missing)} not found', type='info')
-
-        if found:
-            columns = [
-                {'name': 'name', 'label': 'Name', 'field': 'name', 'align': 'left'},
-                {'name': 'email', 'label': 'Email', 'field': 'email', 'align': 'left'},
-            ]
-            self.make_table(columns, found, title=f'{len(found)} users found')
-
-        if missing:
-            with ui.column().classes('q-mt-sm'):
-                ui.label(f'{len(missing)} not found:').classes('text-caption text-red')
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success(f"**{len(found)}** users found")
+            if found:
+                st.dataframe(pd.DataFrame(found)[['name', 'email']],
+                             hide_index=True, use_container_width=True)
+        with c2:
+            if missing:
+                st.error(f"**{len(missing)}** not found")
                 for e in missing:
-                    ui.label(f'  {e}').classes('text-caption text-grey-6')
+                    st.caption(f"- {e}")
 
         if not found:
             return
         if dry_run:
-            ui.notify(f'Dry run: {len(found)} users would be added', type='info')
+            st.info(f"Dry run complete. {len(found)} users would be added.")
             return
 
         resp = self.api.groups.add_members(self.get_state('group_id'), [u['id'] for u in found])
         if resp.success:
-            ui.notify(f'Added {len(found)} members', type='positive')
+            st.success(f"Added {len(found)} members to group.")
             self._refresh_members()
         else:
-            ui.notify(f'Failed: {resp.error}', type='negative')
+            st.error(f"Failed: {resp.error}")
 
     def _page_remove(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
-        self.section_title('Remove Members')
+        st.markdown("### Remove Members")
 
         members = self.get_state('members', [])
         if not members:
-            ui.label('No members to remove.').classes('text-grey-6')
+            st.info("No members to remove.")
             return
 
-        columns = [
-            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
-            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
-        ]
-        rows = [{
-            'id': m.get('id', ''),
-            'name': m.get('name', ''),
-            'email': m.get('email', ''),
-        } for m in members]
+        search = st.text_input("Filter", placeholder="Search...", key="gm_rm_filter")
+        filtered = members
+        if search:
+            sl = search.lower()
+            filtered = [m for m in members
+                        if sl in m.get('name', '').lower() or sl in m.get('email', '').lower()]
 
-        table = ui.table(
-            columns=columns, rows=rows, row_key='id',
-            selection='multiple',
-            pagination={'rowsPerPage': 25},
-            title='Select members to remove',
-        ).classes('w-full')
-        table.props('flat bordered dense')
-        table.add_slot('top-right', '''
-            <q-input borderless dense debounce="300" v-model="props.filter" placeholder="Search...">
-                <template v-slot:append><q-icon name="search" /></template>
-            </q-input>
-        ''')
-        table.props('filter=""')
+        options = {f"{m.get('name', '?')} ({m.get('email', '?')})": m.get('id') for m in filtered}
+        selected = st.multiselect("Select members to remove", list(options.keys()), key="gm_rm_sel")
 
-        confirm = ui.checkbox('I confirm this removal')
-
-        def do_remove():
-            if not confirm.value:
-                ui.notify('Confirmation required', type='warning')
-                return
-            selected = table.selected
-            if not selected:
-                ui.notify('No members selected', type='warning')
-                return
-            ids = [s['id'] for s in selected]
-            resp = self.api.groups.remove_members(self.get_state('group_id'), ids)
-            if resp.success:
-                ui.notify(f'Removed {len(ids)} members', type='positive')
-                self._refresh_members()
-                self._refresh()
-            else:
-                ui.notify(f'Failed: {resp.error}', type='negative')
-
-        ui.button('Remove Selected', icon='delete', on_click=do_remove).props(
-            'color=red no-caps').classes('q-mt-sm')
+        if selected:
+            st.warning(f"{len(selected)} member(s) will be removed.")
+            confirm = st.checkbox("I confirm this removal", key="gm_rm_confirm")
+            if st.button("Remove Selected", type="primary", disabled=not confirm, key="gm_rm_btn"):
+                ids = [options[s] for s in selected]
+                resp = self.api.groups.remove_members(self.get_state('group_id'), ids)
+                if resp.success:
+                    st.success(f"Removed {len(selected)} members.")
+                    self._refresh_members()
+                    st.rerun()
+                else:
+                    st.error(f"Failed: {resp.error}")
 
     def _page_export(self) -> None:
         info = self.get_state('group_info')
         if not info:
-            self.navigate('list')
+            self.set_state('page', 'list')
+            st.rerun()
             return
         self._group_header()
-        self.section_title('Export')
+        st.markdown("### Export")
 
         members = self.get_state('members', [])
-        columns = [
-            {'name': 'name', 'label': 'Name', 'field': 'name', 'sortable': True, 'align': 'left'},
-            {'name': 'email', 'label': 'Email', 'field': 'email', 'sortable': True, 'align': 'left'},
-            {'name': 'department', 'label': 'Department', 'field': 'department', 'sortable': True},
-            {'name': 'id', 'label': 'ID', 'field': 'id', 'align': 'left'},
-        ]
-        rows = [{
-            'id': m.get('id', ''),
-            'name': m.get('name', ''),
-            'email': m.get('email', ''),
-            'department': m.get('department', ''),
-        } for m in members]
-
         name = info.get('name', 'group')
 
-        csv_lines = ['Name,Email,Department,ID']
-        for r in rows:
-            csv_lines.append(f"{r['name']},{r['email']},{r['department']},{r['id']}")
-        csv_data = '\n'.join(csv_lines)
+        df = pd.DataFrame([{
+            'Name': m.get('name', ''), 'Email': m.get('email', ''),
+            'Department': m.get('department', ''), 'ID': m.get('id', ''),
+        } for m in members])
 
-        emails_data = '\n'.join(r['email'] for r in rows if r['email'])
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download CSV", data=df.to_csv(index=False),
+                               file_name=f"{name}_members.csv", mime="text/csv",
+                               use_container_width=True, key="gm_dl_csv")
+        with c2:
+            emails = "\n".join(df['Email'].dropna().tolist())
+            st.download_button("Download Emails", data=emails,
+                               file_name=f"{name}_emails.txt", mime="text/plain",
+                               use_container_width=True, key="gm_dl_email")
 
-        with ui.row().classes('q-gutter-sm q-mb-md'):
-            ui.button('Download CSV', icon='download',
-                      on_click=lambda: ui.download(csv_data.encode(),
-                                                    f'{name}_members.csv')).props('no-caps')
-            ui.button('Download Emails', icon='email',
-                      on_click=lambda: ui.download(emails_data.encode(),
-                                                    f'{name}_emails.txt')).props('no-caps outline')
-
-        self.make_table(columns, rows, title=f'{len(rows)} members')
+        st.markdown("### Preview")
+        st.dataframe(df, use_container_width=True, hide_index=True)
