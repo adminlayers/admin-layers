@@ -26,7 +26,7 @@ from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, Que
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
@@ -44,7 +44,7 @@ st.set_page_config(
     page_title=APP_NAME,
     page_icon="⚙️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # =============================================================================
@@ -61,53 +61,56 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Hamburger menu button — hide ALL default content, show clean toggle */
-    [data-testid="collapsedControl"] {
+    /*
+     * Hide ALL Material Symbols icon-text globally.
+     * Streamlit renders icon names like "double_arrow_right", "arrow_down"
+     * as text that gets styled via a web font. When the font fails or
+     * CSS doesn't clip them, the raw text shows. This blanket rule catches
+     * every instance.
+     */
+    [data-testid="collapsedControl"],
+    [data-testid="collapsedControl"] * {
+        font-size: 0 !important;
+        color: transparent !important;
+        line-height: 0 !important;
         overflow: hidden !important;
+        letter-spacing: -9999px !important;
+    }
+    [data-testid="collapsedControl"] {
         width: 2.5rem !important;
         height: 2.5rem !important;
         max-width: 2.5rem !important;
         min-width: 2.5rem !important;
         border-radius: 0.5rem;
         background: rgba(15, 23, 42, 0.85) !important;
-        font-size: 0 !important;
-        line-height: 0 !important;
-        text-indent: -9999px !important;
-        color: transparent !important;
         position: relative !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
         padding: 0 !important;
         z-index: 1100 !important;
-    }
-    [data-testid="collapsedControl"] * {
-        display: none !important;
-        font-size: 0 !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
     }
     [data-testid="collapsedControl"]::after {
         content: "\2630";
         font-size: 1.3rem;
         color: #e2e8f0;
-        text-indent: 0 !important;
+        letter-spacing: normal !important;
         display: block !important;
         visibility: visible !important;
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: auto !important;
-        height: auto !important;
+        inset: 0;
+        line-height: 2.5rem !important;
+        text-align: center;
+        pointer-events: none;
     }
 
-    /* Fix expander arrow icon text */
+    /* Expander chevrons — hide icon-text fallback ("arrow_down" etc.) */
+    [data-testid="stExpander"] details summary span[data-testid],
+    [data-testid="stExpander"] details summary [class*="icon"],
     [data-testid="stExpander"] details summary svg {
-        overflow: hidden;
+        font-size: 0 !important;
+        color: transparent !important;
+        overflow: hidden !important;
         max-width: 1rem;
+        max-height: 1rem;
+        letter-spacing: -9999px !important;
     }
 
     [data-testid="stSidebar"] {
@@ -504,7 +507,8 @@ def page_home():
             unsafe_allow_html=True
         )
 
-    st.markdown("## Welcome to Admin Layers")
+    st.markdown(f"## Welcome to Admin Layers")
+    st.caption(f"v{APP_VERSION}")
 
     if not st.session_state.authenticated:
         st.markdown(
