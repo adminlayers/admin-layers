@@ -2,9 +2,10 @@
 Genesys Cloud API client.
 """
 
-import requests
-from typing import Optional, List, Dict, Any, Generator
 from dataclasses import dataclass
+from typing import Any, Dict, Generator, List, Optional
+
+import requests
 
 from .auth import GenesysAuth
 
@@ -12,6 +13,7 @@ from .auth import GenesysAuth
 @dataclass
 class APIResponse:
     """Standardized API response."""
+
     success: bool
     data: Any = None
     error: Optional[str] = None
@@ -60,7 +62,7 @@ class GenesysCloudAPI:
         endpoint: str,
         params: Optional[Dict] = None,
         json: Optional[Dict] = None,
-        timeout: int = 30
+        timeout: int = 30,
     ) -> APIResponse:
         """
         Make authenticated API request.
@@ -88,7 +90,7 @@ class GenesysCloudAPI:
                 headers=self.auth.get_headers(),
                 params=params,
                 json=json,
-                timeout=timeout
+                timeout=timeout,
             )
 
             if response.status_code == 204:
@@ -99,49 +101,55 @@ class GenesysCloudAPI:
             return APIResponse(
                 success=True,
                 data=response.json() if response.text else None,
-                status_code=response.status_code
+                status_code=response.status_code,
             )
 
         except requests.exceptions.Timeout:
-            return APIResponse(success=False, error="Request timed out", status_code=None)
+            return APIResponse(
+                success=False, error="Request timed out", status_code=None
+            )
         except requests.exceptions.RequestException as e:
             error_msg = str(e)
             status_code = None
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 status_code = e.response.status_code
                 try:
                     error_data = e.response.json()
-                    error_msg = error_data.get('message', error_data.get('error', str(e)))
+                    error_msg = error_data.get(
+                        "message", error_data.get("error", str(e))
+                    )
                 except:
                     error_msg = e.response.text[:500] if e.response.text else str(e)
             return APIResponse(success=False, error=error_msg, status_code=status_code)
 
     def get(self, endpoint: str, params: Optional[Dict] = None) -> APIResponse:
         """GET request."""
-        return self._request('GET', endpoint, params=params)
+        return self._request("GET", endpoint, params=params)
 
-    def post(self, endpoint: str, json: Optional[Dict] = None, params: Optional[Dict] = None) -> APIResponse:
+    def post(
+        self, endpoint: str, json: Optional[Dict] = None, params: Optional[Dict] = None
+    ) -> APIResponse:
         """POST request."""
-        return self._request('POST', endpoint, json=json, params=params)
+        return self._request("POST", endpoint, json=json, params=params)
 
     def put(self, endpoint: str, json: Optional[Dict] = None) -> APIResponse:
         """PUT request."""
-        return self._request('PUT', endpoint, json=json)
+        return self._request("PUT", endpoint, json=json)
 
     def patch(self, endpoint: str, json: Optional[Dict] = None) -> APIResponse:
         """PATCH request."""
-        return self._request('PATCH', endpoint, json=json)
+        return self._request("PATCH", endpoint, json=json)
 
     def delete(self, endpoint: str, params: Optional[Dict] = None) -> APIResponse:
         """DELETE request."""
-        return self._request('DELETE', endpoint, params=params)
+        return self._request("DELETE", endpoint, params=params)
 
     def paginate(
         self,
         endpoint: str,
         params: Optional[Dict] = None,
         page_size: int = 100,
-        max_pages: Optional[int] = None
+        max_pages: Optional[int] = None,
     ) -> Generator[Dict, None, None]:
         """
         Paginate through API results.
@@ -156,23 +164,23 @@ class GenesysCloudAPI:
             Individual entities from paginated results
         """
         params = params or {}
-        params['pageSize'] = page_size
+        params["pageSize"] = page_size
         page = 1
 
         while True:
-            params['pageNumber'] = page
+            params["pageNumber"] = page
             response = self.get(endpoint, params)
 
             if not response.success:
                 break
 
             data = response.data or {}
-            entities = data.get('entities', [])
+            entities = data.get("entities", [])
 
             for entity in entities:
                 yield entity
 
-            page_count = data.get('pageCount', 1)
+            page_count = data.get("pageCount", 1)
 
             if page >= page_count:
                 break
@@ -187,7 +195,7 @@ class GenesysCloudAPI:
         endpoint: str,
         page_size: int = 25,
         page_number: int = 1,
-        params: Optional[Dict] = None
+        params: Optional[Dict] = None,
     ) -> APIResponse:
         """
         Fetch a single page of results from a paginated endpoint.
@@ -215,7 +223,7 @@ class UsersAPI:
 
     def get(self, user_id: str) -> APIResponse:
         """Get user by ID."""
-        return self._client.get(f'/api/v2/users/{user_id}')
+        return self._client.get(f"/api/v2/users/{user_id}")
 
     def search(self, query: str, fields: List[str] = None) -> List[Dict]:
         """
@@ -228,18 +236,13 @@ class UsersAPI:
         Returns:
             List of matching users
         """
-        body = {
-            "query": [{
-                "type": "QUERY_STRING",
-                "value": query
-            }]
-        }
+        body = {"query": [{"type": "QUERY_STRING", "value": query}]}
 
         if fields:
             body["query"][0]["fields"] = fields
 
-        response = self._client.post('/api/v2/users/search', json=body)
-        return response.data.get('results', []) if response.success else []
+        response = self._client.post("/api/v2/users/search", json=body)
+        return response.data.get("results", []) if response.success else []
 
     def search_by_email(self, email: str) -> Optional[Dict]:
         """
@@ -251,29 +254,25 @@ class UsersAPI:
         Returns:
             User dict or None
         """
-        body = {
-            "query": [{
-                "type": "EXACT",
-                "fields": ["email"],
-                "value": email
-            }]
-        }
+        body = {"query": [{"type": "EXACT", "fields": ["email"], "value": email}]}
 
-        response = self._client.post('/api/v2/users/search', json=body)
+        response = self._client.post("/api/v2/users/search", json=body)
         if response.success:
-            results = response.data.get('results', [])
+            results = response.data.get("results", [])
             return results[0] if results else None
         return None
 
     def get_queues(self, user_id: str) -> List[Dict]:
         """Get queues a user belongs to."""
-        return list(self._client.paginate(f'/api/v2/users/{user_id}/queues'))
+        return list(self._client.paginate(f"/api/v2/users/{user_id}/queues"))
 
     def get_groups(self, user_id: str) -> APIResponse:
         """Get groups a user belongs to."""
-        return self._client.get(f'/api/v2/users/{user_id}/groups')
+        return self._client.get(f"/api/v2/users/{user_id}/groups")
 
-    def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
+    def list(
+        self, page_size: int = 100, max_pages: int = None
+    ) -> Generator[Dict, None, None]:
         """
         List all users.
 
@@ -284,15 +283,19 @@ class UsersAPI:
         Yields:
             User dicts
         """
-        yield from self._client.paginate('/api/v2/users', page_size=page_size, max_pages=max_pages)
+        yield from self._client.paginate(
+            "/api/v2/users", page_size=page_size, max_pages=max_pages
+        )
 
     def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
         """List users for a specific page."""
-        return self._client.get_page('/api/v2/users', page_size=page_size, page_number=page_number)
+        return self._client.get_page(
+            "/api/v2/users", page_size=page_size, page_number=page_number
+        )
 
     def update(self, user_id: str, data: Dict[str, Any]) -> APIResponse:
         """Update user details."""
-        return self._client.patch(f'/api/v2/users/{user_id}', json=data)
+        return self._client.patch(f"/api/v2/users/{user_id}", json=data)
 
 
 class GroupsAPI:
@@ -303,7 +306,7 @@ class GroupsAPI:
 
     def get(self, group_id: str) -> APIResponse:
         """Get group by ID."""
-        return self._client.get(f'/api/v2/groups/{group_id}')
+        return self._client.get(f"/api/v2/groups/{group_id}")
 
     def search(self, query: str) -> List[Dict]:
         """
@@ -317,15 +320,11 @@ class GroupsAPI:
         """
         body = {
             "pageSize": 100,
-            "query": [{
-                "type": "CONTAINS",
-                "fields": ["name"],
-                "value": query
-            }]
+            "query": [{"type": "CONTAINS", "fields": ["name"], "value": query}],
         }
 
-        response = self._client.post('/api/v2/groups/search', json=body)
-        return response.data.get('results', []) if response.success else []
+        response = self._client.post("/api/v2/groups/search", json=body)
+        return response.data.get("results", []) if response.success else []
 
     def get_members(self, group_id: str) -> List[Dict]:
         """
@@ -337,7 +336,7 @@ class GroupsAPI:
         Returns:
             List of member user dicts
         """
-        return list(self._client.paginate(f'/api/v2/groups/{group_id}/members'))
+        return list(self._client.paginate(f"/api/v2/groups/{group_id}/members"))
 
     def add_members(self, group_id: str, member_ids: List[str]) -> APIResponse:
         """
@@ -350,11 +349,8 @@ class GroupsAPI:
         Returns:
             APIResponse
         """
-        body = {
-            "memberIds": member_ids,
-            "version": 1
-        }
-        return self._client.post(f'/api/v2/groups/{group_id}/members', json=body)
+        body = {"memberIds": member_ids, "version": 1}
+        return self._client.post(f"/api/v2/groups/{group_id}/members", json=body)
 
     def remove_members(self, group_id: str, member_ids: List[str]) -> APIResponse:
         """
@@ -368,17 +364,23 @@ class GroupsAPI:
             APIResponse
         """
         ids_param = ",".join(member_ids)
-        return self._client.delete(f'/api/v2/groups/{group_id}/members', params={'ids': ids_param})
+        return self._client.delete(
+            f"/api/v2/groups/{group_id}/members", params={"ids": ids_param}
+        )
 
     def list(self, page_size: int = 100) -> Generator[Dict, None, None]:
         """List all groups."""
-        yield from self._client.paginate('/api/v2/groups', page_size=page_size)
+        yield from self._client.paginate("/api/v2/groups", page_size=page_size)
 
     def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
         """List groups for a specific page."""
-        return self._client.get_page('/api/v2/groups', page_size=page_size, page_number=page_number)
+        return self._client.get_page(
+            "/api/v2/groups", page_size=page_size, page_number=page_number
+        )
 
-    def create(self, name: str, description: str, group_type: str, visibility: str) -> APIResponse:
+    def create(
+        self, name: str, description: str, group_type: str, visibility: str
+    ) -> APIResponse:
         """Create a new group."""
         body = {
             "name": name,
@@ -387,15 +389,15 @@ class GroupsAPI:
             "visibility": visibility,
             "rulesVisible": True,
         }
-        return self._client.post('/api/v2/groups', json=body)
+        return self._client.post("/api/v2/groups", json=body)
 
     def update(self, group_id: str, data: Dict[str, Any]) -> APIResponse:
         """Update group details."""
-        return self._client.patch(f'/api/v2/groups/{group_id}', json=data)
+        return self._client.patch(f"/api/v2/groups/{group_id}", json=data)
 
     def delete(self, group_id: str) -> APIResponse:
         """Delete a group."""
-        return self._client.delete(f'/api/v2/groups/{group_id}')
+        return self._client.delete(f"/api/v2/groups/{group_id}")
 
 
 class QueuesAPI:
@@ -406,54 +408,56 @@ class QueuesAPI:
 
     def get(self, queue_id: str) -> APIResponse:
         """Get queue by ID."""
-        return self._client.get(f'/api/v2/routing/queues/{queue_id}')
+        return self._client.get(f"/api/v2/routing/queues/{queue_id}")
 
     def search(self, query: str) -> List[Dict]:
         """Search queues by name."""
         body = {
             "pageSize": 100,
-            "query": [{
-                "type": "CONTAINS",
-                "fields": ["name"],
-                "value": query
-            }]
+            "query": [{"type": "CONTAINS", "fields": ["name"], "value": query}],
         }
-        response = self._client.post('/api/v2/routing/queues/search', json=body)
-        return response.data.get('results', []) if response.success else []
+        response = self._client.post("/api/v2/routing/queues/search", json=body)
+        return response.data.get("results", []) if response.success else []
 
     def get_members(self, queue_id: str) -> List[Dict]:
         """Get queue members."""
-        return list(self._client.paginate(f'/api/v2/routing/queues/{queue_id}/members'))
+        return list(self._client.paginate(f"/api/v2/routing/queues/{queue_id}/members"))
 
     def add_members(self, queue_id: str, member_ids: List[str]) -> APIResponse:
         """Add members to a queue."""
         body = [{"id": uid, "joined": True} for uid in member_ids]
-        return self._client.post(f'/api/v2/routing/queues/{queue_id}/members', json=body)
+        return self._client.post(
+            f"/api/v2/routing/queues/{queue_id}/members", json=body
+        )
 
     def remove_members(self, queue_id: str, member_ids: List[str]) -> APIResponse:
         """Remove members from a queue."""
         body = [{"id": uid, "joined": False} for uid in member_ids]
-        return self._client.post(f'/api/v2/routing/queues/{queue_id}/members', json=body)
+        return self._client.post(
+            f"/api/v2/routing/queues/{queue_id}/members", json=body
+        )
 
     def list(self, page_size: int = 100) -> Generator[Dict, None, None]:
         """List all queues."""
-        yield from self._client.paginate('/api/v2/routing/queues', page_size=page_size)
+        yield from self._client.paginate("/api/v2/routing/queues", page_size=page_size)
 
     def list_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
         """List queues for a specific page."""
-        return self._client.get_page('/api/v2/routing/queues', page_size=page_size, page_number=page_number)
+        return self._client.get_page(
+            "/api/v2/routing/queues", page_size=page_size, page_number=page_number
+        )
 
     def create(self, data: Dict[str, Any]) -> APIResponse:
         """Create a new queue."""
-        return self._client.post('/api/v2/routing/queues', json=data)
+        return self._client.post("/api/v2/routing/queues", json=data)
 
     def update(self, queue_id: str, data: Dict[str, Any]) -> APIResponse:
         """Update queue details."""
-        return self._client.patch(f'/api/v2/routing/queues/{queue_id}', json=data)
+        return self._client.patch(f"/api/v2/routing/queues/{queue_id}", json=data)
 
     def delete(self, queue_id: str) -> APIResponse:
         """Delete a queue."""
-        return self._client.delete(f'/api/v2/routing/queues/{queue_id}')
+        return self._client.delete(f"/api/v2/routing/queues/{queue_id}")
 
 
 class ConversationsAPI:
@@ -464,21 +468,20 @@ class ConversationsAPI:
 
     def get(self, conversation_id: str) -> APIResponse:
         """Get conversation by ID."""
-        return self._client.get(f'/api/v2/conversations/{conversation_id}')
+        return self._client.get(f"/api/v2/conversations/{conversation_id}")
 
     def get_details(self, conversation_id: str) -> APIResponse:
         """Get conversation analytics details."""
-        return self._client.get(f'/api/v2/analytics/conversations/{conversation_id}/details')
+        return self._client.get(
+            f"/api/v2/analytics/conversations/{conversation_id}/details"
+        )
 
     def disconnect(self, conversation_id: str) -> APIResponse:
         """Disconnect a conversation."""
-        return self._client.post(f'/api/v2/conversations/{conversation_id}/disconnect')
+        return self._client.post(f"/api/v2/conversations/{conversation_id}/disconnect")
 
     def query(
-        self,
-        interval: str,
-        filters: List[Dict] = None,
-        page_size: int = 100
+        self, interval: str, filters: List[Dict] = None, page_size: int = 100
     ) -> List[Dict]:
         """
         Query conversation analytics.
@@ -493,14 +496,16 @@ class ConversationsAPI:
         """
         body = {
             "interval": interval,
-            "paging": {"pageSize": page_size, "pageNumber": 1}
+            "paging": {"pageSize": page_size, "pageNumber": 1},
         }
 
         if filters:
             body["segmentFilters"] = filters
 
-        response = self._client.post('/api/v2/analytics/conversations/details/query', json=body)
-        return response.data.get('conversations', []) if response.success else []
+        response = self._client.post(
+            "/api/v2/analytics/conversations/details/query", json=body
+        )
+        return response.data.get("conversations", []) if response.success else []
 
 
 class RoutingAPI:
@@ -511,39 +516,42 @@ class RoutingAPI:
 
     def get_skills(self) -> List[Dict]:
         """Get all routing skills."""
-        return list(self._client.paginate('/api/v2/routing/skills'))
+        return list(self._client.paginate("/api/v2/routing/skills"))
 
     def get_skill(self, skill_id: str) -> APIResponse:
         """Get routing skill by ID."""
-        return self._client.get(f'/api/v2/routing/skills/{skill_id}')
+        return self._client.get(f"/api/v2/routing/skills/{skill_id}")
 
-    def list_skills_page(self, page_size: int = 25, page_number: int = 1) -> APIResponse:
+    def list_skills_page(
+        self, page_size: int = 25, page_number: int = 1
+    ) -> APIResponse:
         """List routing skills for a specific page."""
-        return self._client.get_page('/api/v2/routing/skills', page_size=page_size, page_number=page_number)
+        return self._client.get_page(
+            "/api/v2/routing/skills", page_size=page_size, page_number=page_number
+        )
 
     def get_languages(self) -> List[Dict]:
         """Get all routing languages."""
-        return list(self._client.paginate('/api/v2/routing/languages'))
+        return list(self._client.paginate("/api/v2/routing/languages"))
 
     def get_wrapup_codes(self) -> List[Dict]:
         """Get all wrapup codes."""
-        return list(self._client.paginate('/api/v2/routing/wrapupcodes'))
+        return list(self._client.paginate("/api/v2/routing/wrapupcodes"))
 
     def get_user_skills(self, user_id: str) -> List[Dict]:
         """Get user's routing skills."""
-        return list(self._client.paginate(f'/api/v2/users/{user_id}/routingskills'))
+        return list(self._client.paginate(f"/api/v2/users/{user_id}/routingskills"))
 
-    def add_user_skill(self, user_id: str, skill_id: str, proficiency: float = 1.0) -> APIResponse:
+    def add_user_skill(
+        self, user_id: str, skill_id: str, proficiency: float = 1.0
+    ) -> APIResponse:
         """Add skill to user."""
-        body = {
-            "id": skill_id,
-            "proficiency": proficiency
-        }
-        return self._client.post(f'/api/v2/users/{user_id}/routingskills', json=body)
+        body = {"id": skill_id, "proficiency": proficiency}
+        return self._client.post(f"/api/v2/users/{user_id}/routingskills", json=body)
 
     def remove_user_skill(self, user_id: str, skill_id: str) -> APIResponse:
         """Remove skill from user."""
-        return self._client.delete(f'/api/v2/users/{user_id}/routingskills/{skill_id}')
+        return self._client.delete(f"/api/v2/users/{user_id}/routingskills/{skill_id}")
 
     def create_skill(self, name: str, description: str, state: str) -> APIResponse:
         """Create a new routing skill."""
@@ -552,12 +560,12 @@ class RoutingAPI:
             "description": description,
             "state": state,
         }
-        return self._client.post('/api/v2/routing/skills', json=body)
+        return self._client.post("/api/v2/routing/skills", json=body)
 
     def update_skill(self, skill_id: str, data: Dict[str, Any]) -> APIResponse:
         """Update routing skill."""
-        return self._client.put(f'/api/v2/routing/skills/{skill_id}', json=data)
+        return self._client.put(f"/api/v2/routing/skills/{skill_id}", json=data)
 
     def delete_skill(self, skill_id: str) -> APIResponse:
         """Delete routing skill."""
-        return self._client.delete(f'/api/v2/routing/skills/{skill_id}')
+        return self._client.delete(f"/api/v2/routing/skills/{skill_id}")

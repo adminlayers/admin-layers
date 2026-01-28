@@ -17,14 +17,15 @@ Each resource type has a standard set of endpoints:
 from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Protocol, runtime_checkable
 
-
 # =============================================================================
 # Response type
 # =============================================================================
 
+
 @dataclass
 class ServiceResponse:
     """Standard response from any backend operation."""
+
     success: bool
     data: Any = None
     error: Optional[str] = None
@@ -35,6 +36,7 @@ class ServiceResponse:
 # Resource endpoint protocols
 # =============================================================================
 
+
 @runtime_checkable
 class UsersEndpoint(Protocol):
     """Standard operations for the Users resource."""
@@ -43,7 +45,7 @@ class UsersEndpoint(Protocol):
         """Get user by ID."""
         ...
 
-    def search(self, query: str, fields: List[str] = None) -> List[Dict]:
+    def search(self, query: str, fields: Optional[List[str]] = None) -> List[Dict]:
         """Search users by name/email."""
         ...
 
@@ -51,7 +53,9 @@ class UsersEndpoint(Protocol):
         """Find a single user by exact email match."""
         ...
 
-    def list(self, page_size: int = 100, max_pages: int = None) -> Generator[Dict, None, None]:
+    def list(
+        self, page_size: int = 100, max_pages: Optional[int] = None
+    ) -> Generator[Dict, None, None]:
         """Iterate all users."""
         ...
 
@@ -92,7 +96,9 @@ class GroupsEndpoint(Protocol):
         """Get a single page of groups."""
         ...
 
-    def create(self, name: str, description: str, group_type: str, visibility: str) -> ServiceResponse:
+    def create(
+        self, name: str, description: str, group_type: str, visibility: str
+    ) -> ServiceResponse:
         """Create a new group."""
         ...
 
@@ -174,7 +180,9 @@ class RoutingEndpoint(Protocol):
         """Get a single skill by ID."""
         ...
 
-    def list_skills_page(self, page_size: int = 25, page_number: int = 1) -> ServiceResponse:
+    def list_skills_page(
+        self, page_size: int = 25, page_number: int = 1
+    ) -> ServiceResponse:
         """Get a page of skills."""
         ...
 
@@ -182,7 +190,9 @@ class RoutingEndpoint(Protocol):
         """Get skills assigned to a user."""
         ...
 
-    def add_user_skill(self, user_id: str, skill_id: str, proficiency: float = 1.0) -> ServiceResponse:
+    def add_user_skill(
+        self, user_id: str, skill_id: str, proficiency: float = 1.0
+    ) -> ServiceResponse:
         """Assign a skill to a user."""
         ...
 
@@ -225,6 +235,7 @@ class BackendService(Protocol):
         resp = self.api.users.list_page(page_size=25, page_number=1)
         members = self.api.groups.get_members(group_id)
     """
+
     users: UsersEndpoint
     groups: GroupsEndpoint
     queues: QueuesEndpoint
@@ -245,24 +256,57 @@ def validate_backend(api: Any) -> List[str]:
 
         sub = getattr(api, attr)
         if attr == "users":
-            for method in ["get", "search", "search_by_email", "list_page", "update",
-                           "get_queues", "get_groups"]:
+            for method in [
+                "get",
+                "search",
+                "search_by_email",
+                "list_page",
+                "update",
+                "get_queues",
+                "get_groups",
+            ]:
                 if not hasattr(sub, method):
                     errors.append(f"Missing: {attr}.{method}")
         elif attr == "groups":
-            for method in ["get", "search", "list_page", "create", "update", "delete",
-                           "get_members", "add_members", "remove_members"]:
+            for method in [
+                "get",
+                "search",
+                "list_page",
+                "create",
+                "update",
+                "delete",
+                "get_members",
+                "add_members",
+                "remove_members",
+            ]:
                 if not hasattr(sub, method):
                     errors.append(f"Missing: {attr}.{method}")
         elif attr == "queues":
-            for method in ["get", "search", "list_page", "create", "update", "delete",
-                           "get_members", "add_members", "remove_members"]:
+            for method in [
+                "get",
+                "search",
+                "list_page",
+                "create",
+                "update",
+                "delete",
+                "get_members",
+                "add_members",
+                "remove_members",
+            ]:
                 if not hasattr(sub, method):
                     errors.append(f"Missing: {attr}.{method}")
         elif attr == "routing":
-            for method in ["get_skills", "get_skill", "list_skills_page",
-                           "get_user_skills", "add_user_skill", "remove_user_skill",
-                           "create_skill", "update_skill", "delete_skill"]:
+            for method in [
+                "get_skills",
+                "get_skill",
+                "list_skills_page",
+                "get_user_skills",
+                "add_user_skill",
+                "remove_user_skill",
+                "create_skill",
+                "update_skill",
+                "delete_skill",
+            ]:
                 if not hasattr(sub, method):
                     errors.append(f"Missing: {attr}.{method}")
 

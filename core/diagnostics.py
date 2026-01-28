@@ -14,6 +14,7 @@ import streamlit as st
 @dataclass
 class EndpointResult:
     """Result of a single endpoint diagnostic check."""
+
     name: str
     endpoint: str
     status: str  # 'ok', 'error', 'skipped'
@@ -24,6 +25,7 @@ class EndpointResult:
 @dataclass
 class DiagnosticReport:
     """Full diagnostic report across all subsystems."""
+
     timestamp: str = ""
     backend: str = ""  # 'live' or 'demo'
     results: List[EndpointResult] = field(default_factory=list)
@@ -181,10 +183,7 @@ def clear_cached_report() -> None:
 def render_diagnostics_summary(report: DiagnosticReport) -> None:
     """Render a compact diagnostics summary in Streamlit."""
     if report.all_ok:
-        st.success(
-            f"All {report.total} endpoints OK "
-            f"({report.backend} backend)"
-        )
+        st.success(f"All {report.total} endpoints OK " f"({report.backend} backend)")
     else:
         st.warning(
             f"{report.passed}/{report.total} endpoints OK, "

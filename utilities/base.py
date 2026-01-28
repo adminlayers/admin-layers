@@ -4,7 +4,8 @@ Base utility class for Genesys Cloud utilities.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 import streamlit as st
 
 
@@ -23,6 +24,7 @@ class UtilityConfig:
         requires_queue: Whether utility requires a queue selection
         requires_user: Whether utility requires a user selection
     """
+
     id: str
     name: str
     description: str

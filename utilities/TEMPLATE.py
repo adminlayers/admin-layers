@@ -9,9 +9,10 @@ Copy this template to create new utilities:
 4. Register in app.py UTILITIES dict
 """
 
-import streamlit as st
+from typing import Any, Dict, List, Optional
+
 import pandas as pd
-from typing import List, Dict, Optional, Any
+import streamlit as st
 
 from .base import BaseUtility, UtilityConfig
 
@@ -43,15 +44,15 @@ class TemplateUtility(BaseUtility):
             UtilityConfig with utility settings
         """
         return UtilityConfig(
-            id="template_utility",           # Unique ID (snake_case)
-            name="Template Utility",         # Display name
+            id="template_utility",  # Unique ID (snake_case)
+            name="Template Utility",  # Display name
             description="Template for new utilities",  # Short description
-            icon="ðŸ”§",                       # Emoji icon
-            category="General",              # Category for sidebar grouping
-            requires_group=False,            # Set True if utility needs group selection
-            requires_queue=False,            # Set True if utility needs queue selection
-            requires_user=False,             # Set True if utility needs user selection
-            tags=["template", "example"]     # Searchable tags
+            icon="ðŸ”§",  # Emoji icon
+            category="General",  # Category for sidebar grouping
+            requires_group=False,  # Set True if utility needs group selection
+            requires_queue=False,  # Set True if utility needs queue selection
+            requires_user=False,  # Set True if utility needs user selection
+            tags=["template", "example"],  # Searchable tags
         )
 
     # =========================================================================
@@ -66,11 +67,11 @@ class TemplateUtility(BaseUtility):
         Use get_state/set_state for utility-scoped state.
         """
         # Initialize state only once
-        if self.get_state('initialized') is None:
-            self.set_state('initialized', True)
-            self.set_state('page', 'main')      # Current page/view
-            self.set_state('data', [])          # Loaded data
-            self.set_state('selected', None)    # Selected item
+        if self.get_state("initialized") is None:
+            self.set_state("initialized", True)
+            self.set_state("page", "main")  # Current page/view
+            self.set_state("data", [])  # Loaded data
+            self.set_state("selected", None)  # Selected item
 
     def cleanup(self) -> None:
         """
@@ -96,18 +97,22 @@ class TemplateUtility(BaseUtility):
         # Example: Resource selection
         resource_id = st.text_input(
             "Resource ID",
-            value=self.get_state('resource_id', ''),
+            value=self.get_state("resource_id", ""),
             placeholder="Enter ID...",
-            key=f"{self.get_config().id}_resource_input"
+            key=f"{self.get_config().id}_resource_input",
         )
 
         # Action buttons
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Load", use_container_width=True, key=f"{self.get_config().id}_load"):
+            if st.button(
+                "Load", use_container_width=True, key=f"{self.get_config().id}_load"
+            ):
                 self._load_resource(resource_id)
         with col2:
-            if st.button("Clear", use_container_width=True, key=f"{self.get_config().id}_clear"):
+            if st.button(
+                "Clear", use_container_width=True, key=f"{self.get_config().id}_clear"
+            ):
                 self._clear_resource()
 
         # Example: Search expander
@@ -116,7 +121,7 @@ class TemplateUtility(BaseUtility):
                 "Search",
                 placeholder="Search...",
                 key=f"{self.get_config().id}_search",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
             )
             if query:
                 self._render_search_results(query)
@@ -126,20 +131,34 @@ class TemplateUtility(BaseUtility):
         # Navigation buttons
         st.markdown("#### Views")
 
-        has_data = self.get_state('data') is not None and len(self.get_state('data', [])) > 0
+        has_data = (
+            self.get_state("data") is not None and len(self.get_state("data", [])) > 0
+        )
 
-        if st.button("Main View", use_container_width=True, key=f"{self.get_config().id}_nav_main"):
-            self.set_state('page', 'main')
+        if st.button(
+            "Main View",
+            use_container_width=True,
+            key=f"{self.get_config().id}_nav_main",
+        ):
+            self.set_state("page", "main")
             st.rerun()
 
-        if st.button("Action View", use_container_width=True, disabled=not has_data,
-                     key=f"{self.get_config().id}_nav_action"):
-            self.set_state('page', 'action')
+        if st.button(
+            "Action View",
+            use_container_width=True,
+            disabled=not has_data,
+            key=f"{self.get_config().id}_nav_action",
+        ):
+            self.set_state("page", "action")
             st.rerun()
 
-        if st.button("Export", use_container_width=True, disabled=not has_data,
-                     key=f"{self.get_config().id}_nav_export"):
-            self.set_state('page', 'export')
+        if st.button(
+            "Export",
+            use_container_width=True,
+            disabled=not has_data,
+            key=f"{self.get_config().id}_nav_export",
+        ):
+            self.set_state("page", "export")
             st.rerun()
 
     def _render_search_results(self, query: str) -> None:
@@ -166,13 +185,13 @@ class TemplateUtility(BaseUtility):
         self.init_state()
 
         # Route to current page
-        page = self.get_state('page', 'main')
+        page = self.get_state("page", "main")
 
-        if page == 'main':
+        if page == "main":
             self._render_main_page()
-        elif page == 'action':
+        elif page == "action":
             self._render_action_page()
-        elif page == 'export':
+        elif page == "export":
             self._render_export_page()
         else:
             self._render_main_page()
@@ -180,7 +199,7 @@ class TemplateUtility(BaseUtility):
     def _render_main_page(self) -> None:
         """Render the main/default page."""
         config = self.get_config()
-        data = self.get_state('data', [])
+        data = self.get_state("data", [])
 
         st.markdown(f"## {config.name}")
 
@@ -220,7 +239,7 @@ class TemplateUtility(BaseUtility):
         """Render action page (create/update/delete operations)."""
         st.markdown("## Actions")
 
-        data = self.get_state('data', [])
+        data = self.get_state("data", [])
         st.caption(f"Working with {len(data)} items")
 
         # Example: Tabs for different actions
@@ -232,7 +251,7 @@ class TemplateUtility(BaseUtility):
                 "Enter items (one per line)",
                 height=150,
                 placeholder="item1\nitem2\nitem3",
-                key=f"{self.get_config().id}_add_input"
+                key=f"{self.get_config().id}_add_input",
             )
 
             col1, col2 = st.columns(2)
@@ -252,7 +271,7 @@ class TemplateUtility(BaseUtility):
         """Render export page."""
         st.markdown("## Export")
 
-        data = self.get_state('data', [])
+        data = self.get_state("data", [])
         st.caption(f"{len(data)} items available for export")
 
         df = self._build_dataframe(data)
@@ -268,17 +287,17 @@ class TemplateUtility(BaseUtility):
                 data=csv_data,
                 file_name="export.csv",
                 mime="text/csv",
-                use_container_width=True
+                use_container_width=True,
             )
 
         with col2:
-            json_data = df.to_json(orient='records', indent=2)
+            json_data = df.to_json(orient="records", indent=2)
             st.download_button(
                 "Download JSON",
                 data=json_data,
                 file_name="export.json",
                 mime="application/json",
-                use_container_width=True
+                use_container_width=True,
             )
 
         st.markdown("### Preview")
@@ -323,26 +342,29 @@ class TemplateUtility(BaseUtility):
             #     self.show_error(f"Failed to load: {response.error}")
 
             # Placeholder implementation
-            self.set_state('resource_id', resource_id)
-            self.set_state('data', [
-                {'id': '1', 'name': 'Item 1', 'status': 'Active'},
-                {'id': '2', 'name': 'Item 2', 'status': 'Active'},
-                {'id': '3', 'name': 'Item 3', 'status': 'Inactive'},
-            ])
+            self.set_state("resource_id", resource_id)
+            self.set_state(
+                "data",
+                [
+                    {"id": "1", "name": "Item 1", "status": "Active"},
+                    {"id": "2", "name": "Item 2", "status": "Active"},
+                    {"id": "3", "name": "Item 3", "status": "Inactive"},
+                ],
+            )
             self.show_success(f"Loaded resource: {resource_id}")
             st.rerun()
 
     def _clear_resource(self) -> None:
         """Clear current resource selection."""
-        self.set_state('resource_id', '')
-        self.set_state('resource_info', None)
-        self.set_state('data', [])
-        self.set_state('page', 'main')
+        self.set_state("resource_id", "")
+        self.set_state("resource_info", None)
+        self.set_state("data", [])
+        self.set_state("page", "main")
         st.rerun()
 
     def _refresh_data(self) -> None:
         """Refresh current data."""
-        resource_id = self.get_state('resource_id')
+        resource_id = self.get_state("resource_id")
         if resource_id:
             self._load_resource(resource_id)
 
@@ -355,20 +377,21 @@ class TemplateUtility(BaseUtility):
         if not data:
             return pd.DataFrame()
 
-        return pd.DataFrame([{
-            'Name': item.get('name', 'Unknown'),
-            'Status': item.get('status', 'N/A'),
-            'ID': item.get('id', '')
-        } for item in data])
+        return pd.DataFrame(
+            [
+                {
+                    "Name": item.get("name", "Unknown"),
+                    "Status": item.get("status", "N/A"),
+                    "ID": item.get("id", ""),
+                }
+                for item in data
+            ]
+        )
 
     def _process_add(self, input_text: str, dry_run: bool) -> None:
         """Process adding items."""
         # Parse input
-        items = [
-            line.strip()
-            for line in input_text.split('\n')
-            if line.strip()
-        ]
+        items = [line.strip() for line in input_text.split("\n") if line.strip()]
 
         if not items:
             self.show_error("No valid items found")
@@ -377,7 +400,7 @@ class TemplateUtility(BaseUtility):
         st.markdown("### Processing")
         progress = st.progress(0)
 
-        results = {'success': [], 'failed': []}
+        results = {"success": [], "failed": []}
 
         for i, item in enumerate(items):
             progress.progress((i + 1) / len(items))
@@ -391,28 +414,28 @@ class TemplateUtility(BaseUtility):
             #     results['failed'].append(item)
 
             # Placeholder
-            results['success'].append({'item': item, 'data': {'id': str(i)}})
+            results["success"].append({"item": item, "data": {"id": str(i)}})
 
         # Show results
         col1, col2 = st.columns(2)
 
         with col1:
             self.show_success(f"Valid: {len(results['success'])}")
-            for r in results['success']:
+            for r in results["success"]:
                 st.caption(f"OK: {r['item']}")
 
         with col2:
-            if results['failed']:
+            if results["failed"]:
                 self.show_error(f"Failed: {len(results['failed'])}")
-                for item in results['failed']:
+                for item in results["failed"]:
                     st.caption(f"X: {item}")
 
         # Execute if not dry run
-        if results['success'] and not dry_run:
+        if results["success"] and not dry_run:
             st.markdown("---")
             # Execute the operation
             # response = self.api.groups.add_members(...)
             self.show_success(f"Added {len(results['success'])} items")
             self._refresh_data()
-        elif results['success'] and dry_run:
+        elif results["success"] and dry_run:
             self.show_info("Preview complete. Uncheck 'Preview only' to execute.")

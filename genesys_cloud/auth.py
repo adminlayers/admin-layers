@@ -2,10 +2,11 @@
 Authentication module for Genesys Cloud.
 """
 
-import requests
-from typing import Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Optional, Tuple
+
+import requests
 
 from .config import GenesysConfig, load_config
 
@@ -13,6 +14,7 @@ from .config import GenesysConfig, load_config
 @dataclass
 class AuthToken:
     """OAuth token with metadata."""
+
     access_token: str
     token_type: str
     expires_in: int
@@ -59,10 +61,8 @@ class GenesysAuth:
 
     @classmethod
     def from_config(
-        cls,
-        config_path: str = "config.json",
-        env_prefix: str = "GENESYS"
-    ) -> Optional['GenesysAuth']:
+        cls, config_path: str = "config.json", env_prefix: str = "GENESYS"
+    ) -> Optional["GenesysAuth"]:
         """
         Create GenesysAuth from configuration file or environment.
 
@@ -80,11 +80,8 @@ class GenesysAuth:
 
     @classmethod
     def from_credentials(
-        cls,
-        client_id: str,
-        client_secret: str,
-        region: str = "mypurecloud.com"
-    ) -> 'GenesysAuth':
+        cls, client_id: str, client_secret: str, region: str = "mypurecloud.com"
+    ) -> "GenesysAuth":
         """
         Create GenesysAuth from explicit credentials.
 
@@ -100,7 +97,7 @@ class GenesysAuth:
             client_id=client_id,
             client_secret=client_secret,
             region=region,
-            source='manual'
+            source="manual",
         )
         return cls(config)
 
@@ -129,9 +126,9 @@ class GenesysAuth:
         token_url = f"{self.config.auth_url}/oauth/token"
 
         data = {
-            'grant_type': 'client_credentials',
-            'client_id': self.config.client_id,
-            'client_secret': self.config.client_secret
+            "grant_type": "client_credentials",
+            "client_id": self.config.client_id,
+            "client_secret": self.config.client_secret,
         }
 
         try:
@@ -140,9 +137,9 @@ class GenesysAuth:
 
             token_data = response.json()
             self._token = AuthToken(
-                access_token=token_data['access_token'],
-                token_type=token_data.get('token_type', 'Bearer'),
-                expires_in=token_data.get('expires_in', 86400)
+                access_token=token_data["access_token"],
+                token_type=token_data.get("token_type", "Bearer"),
+                expires_in=token_data.get("expires_in", 86400),
             )
 
             return True, "Authentication successful"
@@ -151,10 +148,12 @@ class GenesysAuth:
             return False, "Authentication timed out"
         except requests.exceptions.RequestException as e:
             error_msg = str(e)
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 try:
                     error_data = e.response.json()
-                    error_msg = error_data.get('error_description', error_data.get('error', str(e)))
+                    error_msg = error_data.get(
+                        "error_description", error_data.get("error", str(e))
+                    )
                 except:
                     error_msg = e.response.text
             return False, f"Authentication failed: {error_msg}"
@@ -190,6 +189,6 @@ class GenesysAuth:
             raise ValueError("Not authenticated. Call authenticate() first.")
 
         return {
-            'Authorization': f'Bearer {self._token.access_token}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {self._token.access_token}",
+            "Content-Type": "application/json",
         }
