@@ -26,7 +26,7 @@ from utilities import BaseUtility, GroupManagerUtility, SkillManagerUtility, Que
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
