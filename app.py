@@ -26,6 +26,7 @@ from genesys_cloud import GenesysAuth, GenesysCloudAPI, get_regions, load_config
 # Utilities
 from utilities import (
     BaseUtility,
+    ChatAssistantUtility,
     GroupManagerUtility,
     QueueManagerUtility,
     SkillManagerUtility,
@@ -37,10 +38,11 @@ from utilities import (
 # =============================================================================
 
 APP_NAME = "Admin Layers"
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.3.0"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
+    "chat_assistant": ChatAssistantUtility,
     "group_manager": GroupManagerUtility,
     "user_manager": UserManagerUtility,
     "skill_manager": SkillManagerUtility,
@@ -367,14 +369,23 @@ def init_session_state():
         "page": "home",
         "demo_mode": False,
         "local_user": None,
+        "active_profile_id": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
 
+    # Load active profile from storage
     if st.session_state.local_user is None:
         storage = get_storage()
-        st.session_state.local_user = storage.retrieve_local_user()
+        # Try new multi-profile system first
+        active_profile = storage.get_active_profile()
+        if active_profile:
+            st.session_state.local_user = active_profile
+            st.session_state.active_profile_id = active_profile.get("id")
+        else:
+            # Fall back to legacy single profile
+            st.session_state.local_user = storage.retrieve_local_user()
 
 
 def _run_startup_diagnostics(api, is_demo: bool = False):
@@ -695,46 +706,81 @@ def page_connect():
         saved_creds = storage.retrieve_credentials()
         saved_profile = storage.retrieve_local_user()
 
-        with st.expander("Local User Profile (stored locally)", expanded=False):
+        with st.expander("User Profiles (multiple login identities)", expanded=False):
             st.markdown(
-                "Set a local profile for SaaS-style usage. "
-                "This stays on the machine/browser in encrypted storage."
+                "Create multiple profiles for different identities. "
+                "Profiles are stored locally in encrypted storage."
             )
-            with st.form("local_user_form"):
+
+            # List existing profiles
+            profiles = storage.retrieve_profiles()
+            active_id = st.session_state.active_profile_id
+
+            if profiles:
+                st.markdown("**Your Profiles:**")
+                for profile in profiles:
+                    pid = profile.get("id", "")
+                    pname = profile.get("name", "Unknown")
+                    pemail = profile.get("email", "")
+                    is_active = pid == active_id
+
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        label = f"**{pname}** ({pemail})"
+                        if is_active:
+                            label += " ✓"
+                        st.markdown(label)
+                    with col2:
+                        if not is_active:
+                            if st.button("Use", key=f"use_profile_{pid}"):
+                                storage.set_active_profile(pid)
+                                st.session_state.local_user = profile
+                                st.session_state.active_profile_id = pid
+                                st.rerun()
+                    with col3:
+                        if st.button("🗑️", key=f"del_profile_{pid}"):
+                            storage.delete_profile(pid)
+                            if is_active:
+                                st.session_state.local_user = None
+                                st.session_state.active_profile_id = None
+                            st.rerun()
+
+                st.markdown("---")
+
+            # Add new profile form
+            st.markdown("**Add New Profile:**")
+            with st.form("add_profile_form"):
                 name = st.text_input(
                     "Display name",
-                    value=(saved_profile or {}).get("name", ""),
                     placeholder="Jane Admin",
                 )
                 email = st.text_input(
                     "Work email",
-                    value=(saved_profile or {}).get("email", ""),
                     placeholder="jane@company.com",
                 )
                 company = st.text_input(
                     "Company",
-                    value=(saved_profile or {}).get("company", ""),
-                    placeholder="Company name",
+                    placeholder="Company name (optional)",
                 )
-                save_profile = st.form_submit_button(
-                    "Save Local Profile", use_container_width=True
-                )
-                if save_profile:
+                if st.form_submit_button("Add Profile", use_container_width=True):
                     if name and email:
-                        storage.store_local_user(
-                            {"name": name, "email": email, "company": company}
+                        new_id = storage.add_profile(
+                            {
+                                "name": name,
+                                "email": email,
+                                "company": company,
+                            }
                         )
-                        st.session_state.local_user = storage.retrieve_local_user()
-                        st.success("Local profile saved.")
+                        # Auto-activate if first profile
+                        if len(profiles) == 0:
+                            storage.set_active_profile(new_id)
+                            new_profile = storage.get_profile(new_id)
+                            st.session_state.local_user = new_profile
+                            st.session_state.active_profile_id = new_id
+                        st.success(f"Profile '{name}' added!")
+                        st.rerun()
                     else:
                         st.error("Name and email are required.")
-
-            if saved_profile:
-                if st.button("🗑️ Clear Local Profile", key="clear_local_profile"):
-                    storage.clear_local_user()
-                    st.session_state.local_user = None
-                    st.success("Local profile cleared.")
-                    st.rerun()
 
         with st.form("connect_form"):
             st.markdown("### OAuth Client Credentials")
