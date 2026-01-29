@@ -8,7 +8,8 @@ Provides a chat interface with multiple backend support:
 Uses Streamlit's native chat components for standard UX.
 """
 
-from typing import Any, Dict, List, Optional
+import base64
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 import streamlit as st
@@ -205,7 +206,7 @@ class ChatAssistantUtility(BaseUtility):
 
     def _chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
     ) -> Optional[str]:
         """Send messages and get response."""
         client = self._get_client()
@@ -214,7 +215,9 @@ class ChatAssistantUtility(BaseUtility):
 
         # Build messages with system prompt
         system_prompt = st.session_state.chat_system_prompt
-        full_messages = [{"role": "system", "content": system_prompt}]
+        full_messages: List[Dict[str, Any]] = [
+            {"role": "system", "content": system_prompt}
+        ]
         full_messages.extend(messages)
 
         try:
@@ -229,6 +232,57 @@ class ChatAssistantUtility(BaseUtility):
         except Exception as e:
             st.error(f"API Error: {str(e)}")
             return None
+
+    def _encode_image(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+        """Encode image bytes to base64 data URL."""
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        return f"data:{mime_type};base64,{b64}"
+
+    def _build_message_content(
+        self,
+        text: Optional[str] = None,
+        images: Optional[List[Any]] = None,
+        audio: Optional[Any] = None,
+    ) -> Union[str, List[Dict[str, Any]]]:
+        """Build message content, handling text, images, and audio."""
+        # If only text, return simple string
+        if not images and not audio:
+            return text or ""
+
+        # Build multimodal content array
+        content: List[Dict[str, Any]] = []
+
+        # Add text if present
+        if text:
+            content.append({"type": "text", "text": text})
+
+        # Add images
+        if images:
+            for img in images:
+                try:
+                    img_bytes = img.read()
+                    img.seek(0)  # Reset for display
+                    mime = getattr(img, "type", "image/jpeg")
+                    data_url = self._encode_image(img_bytes, mime)
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": data_url},
+                        }
+                    )
+                except Exception:
+                    pass
+
+        # Note about audio (most APIs don't support audio in chat)
+        if audio:
+            content.append(
+                {
+                    "type": "text",
+                    "text": "[Audio attachment - transcription not available]",
+                }
+            )
+
+        return content if content else ""
 
     def _save_settings(self):
         """Save current chat settings."""
@@ -315,27 +369,58 @@ class ChatAssistantUtility(BaseUtility):
         # Chat messages display
         for msg in st.session_state.chat_messages:
             with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+                self._render_message_content(msg)
 
-        # Chat input
-        if prompt := st.chat_input("Type your message..."):
+        # Chat input with audio and file support
+        prompt = st.chat_input(
+            "Type a message, record audio, or attach an image...",
+            accept_file=True,
+            file_type=["jpg", "jpeg", "png", "gif", "webp"],
+        )
+
+        if prompt:
+            # Extract components from prompt
+            text = getattr(prompt, "text", None) or (
+                prompt if isinstance(prompt, str) else None
+            )
+            files = prompt.get("files") if hasattr(prompt, "get") else None
+            audio = getattr(prompt, "audio", None)
+
+            # Build message content
+            content = self._build_message_content(
+                text=text,
+                images=files,
+                audio=audio,
+            )
+
+            # Store display data separately for rendering
+            display_data = {
+                "text": text,
+                "images": files,
+                "audio": audio,
+            }
+
             # Add user message
             st.session_state.chat_messages.append(
                 {
                     "role": "user",
-                    "content": prompt,
+                    "content": content,
+                    "_display": display_data,
                 }
             )
 
             # Display user message
             with st.chat_message("user"):
-                st.markdown(prompt)
+                self._render_user_input(text, files, audio)
 
             # Get assistant response
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     response = self._chat_completion(
-                        messages=st.session_state.chat_messages,
+                        messages=[
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.chat_messages
+                        ],
                     )
 
                 if response:
@@ -350,6 +435,52 @@ class ChatAssistantUtility(BaseUtility):
                     st.error(
                         "Failed to get response. Check your settings and connection."
                     )
+
+    def _render_message_content(self, msg: Dict[str, Any]):
+        """Render a message with support for multimodal content."""
+        content = msg.get("content", "")
+        display = msg.get("_display")
+
+        if display:
+            # Render with display data
+            self._render_user_input(
+                display.get("text"),
+                display.get("images"),
+                display.get("audio"),
+            )
+        elif isinstance(content, str):
+            st.markdown(content)
+        elif isinstance(content, list):
+            # Multimodal content array
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        st.markdown(item.get("text", ""))
+                    elif item.get("type") == "image_url":
+                        url = item.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            st.image(url)
+
+    def _render_user_input(
+        self,
+        text: Optional[str],
+        images: Optional[List[Any]],
+        audio: Optional[Any],
+    ):
+        """Render user input with text, images, and audio."""
+        if text:
+            st.markdown(text)
+        if images:
+            for img in images:
+                try:
+                    st.image(img, use_container_width=True)
+                except Exception:
+                    st.caption("📎 Image attachment")
+        if audio:
+            try:
+                st.audio(audio)
+            except Exception:
+                st.caption("🎤 Audio recording")
 
     def _render_settings(self):
         """Render the settings panel."""
