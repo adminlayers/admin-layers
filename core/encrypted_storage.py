@@ -243,6 +243,120 @@ class EncryptedStorage:
         """Clear stored local user profile."""
         return self.delete("local_user_profile")
 
+    # =========================================================================
+    # Multiple Profiles Support
+    # =========================================================================
+
+    def store_profiles(self, profiles: list) -> bool:
+        """Store list of user profiles encrypted."""
+        return self.store("user_profiles", profiles)
+
+    def retrieve_profiles(self) -> list:
+        """Retrieve stored user profiles. Returns empty list if none."""
+        return self.retrieve("user_profiles") or []
+
+    def add_profile(self, profile: Dict[str, str]) -> str:
+        """
+        Add a new profile and return its ID.
+
+        Profile should contain: name, email, company (optional)
+        """
+        import uuid
+
+        profiles = self.retrieve_profiles()
+        profile_id = str(uuid.uuid4())[:8]
+        profile_data = {
+            "id": profile_id,
+            "name": profile.get("name", ""),
+            "email": profile.get("email", ""),
+            "company": profile.get("company", ""),
+            "created_at": datetime.now().isoformat(),
+        }
+        profiles.append(profile_data)
+        self.store_profiles(profiles)
+        return profile_id
+
+    def update_profile(self, profile_id: str, profile: Dict[str, str]) -> bool:
+        """Update an existing profile by ID."""
+        profiles = self.retrieve_profiles()
+        for i, p in enumerate(profiles):
+            if p.get("id") == profile_id:
+                profiles[i] = {
+                    **p,
+                    "name": profile.get("name", p.get("name", "")),
+                    "email": profile.get("email", p.get("email", "")),
+                    "company": profile.get("company", p.get("company", "")),
+                    "updated_at": datetime.now().isoformat(),
+                }
+                return self.store_profiles(profiles)
+        return False
+
+    def delete_profile(self, profile_id: str) -> bool:
+        """Delete a profile by ID."""
+        profiles = self.retrieve_profiles()
+        profiles = [p for p in profiles if p.get("id") != profile_id]
+        return self.store_profiles(profiles)
+
+    def get_profile(self, profile_id: str) -> Optional[Dict[str, str]]:
+        """Get a specific profile by ID."""
+        profiles = self.retrieve_profiles()
+        for p in profiles:
+            if p.get("id") == profile_id:
+                return p
+        return None
+
+    def set_active_profile(self, profile_id: str) -> bool:
+        """Set the active profile ID."""
+        return self.store("active_profile_id", profile_id)
+
+    def get_active_profile_id(self) -> Optional[str]:
+        """Get the active profile ID."""
+        return self.retrieve("active_profile_id")
+
+    def get_active_profile(self) -> Optional[Dict[str, str]]:
+        """Get the currently active profile."""
+        profile_id = self.get_active_profile_id()
+        if profile_id:
+            return self.get_profile(profile_id)
+        return None
+
+    # =========================================================================
+    # OpenRouter / Chat API Key Storage
+    # =========================================================================
+
+    def store_openrouter_key(self, api_key: str) -> bool:
+        """Store OpenRouter API key encrypted."""
+        return self.store(
+            "openrouter_api_key",
+            {
+                "api_key": api_key,
+                "stored_at": datetime.now().isoformat(),
+            },
+        )
+
+    def retrieve_openrouter_key(self) -> Optional[str]:
+        """Retrieve stored OpenRouter API key."""
+        data = self.retrieve("openrouter_api_key")
+        if data and isinstance(data, dict):
+            return data.get("api_key")
+        return None
+
+    def clear_openrouter_key(self) -> bool:
+        """Clear stored OpenRouter API key."""
+        return self.delete("openrouter_api_key")
+
+    # =========================================================================
+    # Chat Settings Storage
+    # =========================================================================
+
+    def store_chat_settings(self, settings: Dict[str, Any]) -> bool:
+        """Store chat settings (model, system prompt, etc.)."""
+        return self.store("chat_settings", settings)
+
+    def retrieve_chat_settings(self) -> Optional[Dict[str, Any]]:
+        """Retrieve chat settings."""
+        return self.retrieve("chat_settings")
+
     def store_session(self, session_data: Dict) -> bool:
         """Store session state data encrypted."""
         return self.store("session_data", session_data)
