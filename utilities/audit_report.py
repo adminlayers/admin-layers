@@ -4,9 +4,9 @@ Interactive dashboard showing code quality issues, disconnected code,
 incomplete implementations, and framework remnants.
 """
 
-from typing import Dict, List, Any
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
@@ -118,8 +118,7 @@ AUDIT_FINDINGS: List[Dict[str, Any]] = [
             "list in validate_backend() for complete protocol compliance checking."
         ),
         "code_snippet": (
-            "# Missing from validation:\n"
-            "# 'get_languages', 'get_wrapup_codes'"
+            "# Missing from validation:\n" "# 'get_languages', 'get_wrapup_codes'"
         ),
     },
     {
@@ -265,7 +264,7 @@ AUDIT_FINDINGS: List[Dict[str, Any]] = [
             "An f-string is used without any variable interpolation. "
             "This is unnecessary and should be a regular string."
         ),
-        "recommendation": "Change f\"string\" to \"string\" if no interpolation needed.",
+        "recommendation": 'Change f"string" to "string" if no interpolation needed.',
         "code_snippet": 'f"Welcome to Admin Layers"  # No placeholders',
     },
     {
@@ -579,10 +578,12 @@ class AuditReportUtility(BaseUtility):
             cat = f["category"]
             by_cat[cat] = by_cat.get(cat, 0) + 1
 
-        df_cat = pd.DataFrame([
-            {"Category": cat, "Count": count}
-            for cat, count in sorted(by_cat.items(), key=lambda x: -x[1])
-        ])
+        df_cat = pd.DataFrame(
+            [
+                {"Category": cat, "Count": count}
+                for cat, count in sorted(by_cat.items(), key=lambda x: -x[1])
+            ]
+        )
 
         col1, col2 = st.columns([2, 1])
         with col1:
@@ -645,7 +646,9 @@ class AuditReportUtility(BaseUtility):
                     st.markdown(f"**Severity:** {f['severity'].upper()}")
                     st.markdown(f"**Category:** {f['category']}")
                     if f["line_number"] > 0:
-                        st.markdown(f"**Location:** {f['file_path']}:{f['line_number']}")
+                        st.markdown(
+                            f"**Location:** {f['file_path']}:{f['line_number']}"
+                        )
                     else:
                         st.markdown(f"**Location:** {f['file_path']}")
 
