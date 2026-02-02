@@ -25,6 +25,7 @@ from genesys_cloud import GenesysAuth, GenesysCloudAPI, get_regions, load_config
 
 # Utilities
 from utilities import (
+    AuditReportUtility,
     BaseUtility,
     ChatAssistantUtility,
     GroupManagerUtility,
@@ -42,6 +43,7 @@ APP_VERSION = "1.3.0"
 
 # Register available utilities here
 UTILITIES: Dict[str, Type[BaseUtility]] = {
+    "audit_report": AuditReportUtility,
     "chat_assistant": ChatAssistantUtility,
     "group_manager": GroupManagerUtility,
     "user_manager": UserManagerUtility,
