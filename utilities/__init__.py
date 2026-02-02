@@ -4,6 +4,7 @@ Admin Layers Utilities
 Modular utilities for Genesys Cloud administration.
 """
 
+from .audit_report import AuditReportUtility
 from .base import BaseUtility, UtilityConfig
 from .chat_assistant import ChatAssistantUtility
 from .group_manager import GroupManagerUtility
@@ -12,6 +13,7 @@ from .skill_manager import SkillManagerUtility
 from .user_manager import UserManagerUtility
 
 __all__ = [
+    "AuditReportUtility",
     "BaseUtility",
     "UtilityConfig",
     "ChatAssistantUtility",
